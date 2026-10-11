@@ -1,0 +1,22 @@
+# Ambientes virtuais
+.venv/
+venv/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# Testes e cobertura
+.coverage
+htmlcov/
+.pytest_cache/
+
+# IDE
+.idea/
+
+# Arquivos temporários
+*.log
+.DS_Store
