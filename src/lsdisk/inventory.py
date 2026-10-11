@@ -4,13 +4,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from collections.abc import Iterator
 
-from storix.analyzers.filesystems import (
+from lsdisk.analyzers.filesystems import (
     FilesystemGroup,
     group_filesystems,
 )
-from storix.collectors.block_devices import collect_block_devices
-from storix.collectors.filesystems import collect_filesystems
-from storix.models import BlockDevice, FilesystemUsage
+from lsdisk.collectors.block_devices import collect_block_devices
+from lsdisk.collectors.filesystems import collect_filesystems
+from lsdisk.models import BlockDevice, FilesystemUsage
 
 
 @dataclass

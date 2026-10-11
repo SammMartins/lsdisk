@@ -2,10 +2,10 @@
 
 from typing import Any
 
-from storix.analyzers.capacity import format_bytes
-from storix.analyzers.filesystems import classify_filesystem
-from storix.inventory import StorageInventory
-from storix.models import BlockDevice, FilesystemUsage
+from lsdisk.analyzers.capacity import format_bytes
+from lsdisk.analyzers.filesystems import classify_filesystem
+from lsdisk.inventory import StorageInventory
+from lsdisk.models import BlockDevice, FilesystemUsage
 
 
 SUMMARY_CATEGORIES = {"persistent", "network"}

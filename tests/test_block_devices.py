@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from storix.collectors.block_devices import collect_block_devices
+from lsdisk.collectors.block_devices import collect_block_devices
 
 
 class TestBlockDeviceCollector(unittest.TestCase):

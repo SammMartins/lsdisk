@@ -2,10 +2,10 @@
 
 import unittest
 
-from storix.analyzers.filesystems import group_filesystems
-from storix.inventory import StorageInventory
-from storix.models import BlockDevice, FilesystemUsage
-from storix.serialization import inventory_to_dict
+from lsdisk.analyzers.filesystems import group_filesystems
+from lsdisk.inventory import StorageInventory
+from lsdisk.models import BlockDevice, FilesystemUsage
+from lsdisk.serialization import inventory_to_dict
 
 
 def make_inventory():

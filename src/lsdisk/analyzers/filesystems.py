@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, field
 
-from storix.models import FilesystemUsage
+from lsdisk.models import FilesystemUsage
 
 
 VIRTUAL_FILESYSTEMS = {

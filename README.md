@@ -1,79 +1,93 @@
-# Storix
+<div align="center">
 
-**Cross-distro Linux Storage Explorer**
+  <img src="img/lsdisk.png" alt="lsdisk — Linux Storage Explorer" width="760">
 
-O Storix é um visualizador de armazenamento para Linux que apresenta
-informações sobre HDs, SSDs, partições e sistemas de arquivos de
-maneira compreensível para usuários com diferentes níveis técnicos.
+  <h1>lsdisk</h1>
+  <p><strong>Cross-distro Linux Storage Explorer</strong></p>
+  <p>Understand your disks, partitions, and filesystems — clearly, safely, and from the terminal.</p>
 
-## Objetivos
+</div>
 
-- Identificar dispositivos de armazenamento e suas relações.
-- Apresentar capacidade, espaço utilizado e espaço disponível.
-- Diferenciar discos físicos, partições e sistemas de arquivos.
-- Identificar partições não montadas e dados indisponíveis.
-- Explicar informações técnicas em linguagem acessível.
-- Oferecer uma interface de terminal com cores, tabelas, barras
-  de progresso e visualização hierárquica.
-- Funcionar em diferentes distribuições Linux.
+---
 
-## Princípios do projeto
+## About lsdisk
 
-- Somente leitura: não modificar discos ou partições.
-- Modularidade: separar coleta, análise e apresentação.
-- Portabilidade: evitar dependência de uma distribuição específica.
-- Transparência: não apresentar estimativas como valores confirmados.
-- Testabilidade: validar cálculos e comportamentos com testes.
+**lsdisk** is a Linux storage inspection tool designed to make information about HDDs, SSDs, partitions, and filesystems easier to understand.
 
-## Tecnologias planejadas
+It aims to present technical storage details in a clear, structured terminal interface, helping users explore how their storage is organized without needing to interpret raw system output manually.
 
-- Python
-- Rich, para a interface de terminal
-- APIs da biblioteca padrão do Python
-- Interfaces do Linux, como `/sys` e `/proc`, quando necessárias
-- Ferramentas externas, como `lsblk` e `findmnt`, quando justificadas
-- unittest, para os testes automatizados iniciais
+> **Read-only by design.** lsdisk is intended to inspect storage, not modify it.
 
-## Requisitos
+## Why lsdisk?
+
+Linux provides powerful tools for inspecting storage, but their output can be fragmented across commands and system interfaces. lsdisk aims to bring relevant information together in one place and make the relationships between physical devices, partitions, and filesystems easier to follow.
+
+### Key goals
+
+- **Explore storage devices** — identify disks and understand how their partitions relate to them.
+- **Understand capacity** — present total capacity, used space, and available space where the data is accessible.
+- **Inspect filesystem information** — distinguish recognized filesystems from information that is unavailable or not yet identified.
+- **Find unmounted partitions** — work toward identifying filesystem types without mounting partitions.
+- **Read information at a glance** — use terminal colors, tables, progress bars, and hierarchical views.
+- **Support multiple Linux distributions** — minimize reliance on distribution-specific behavior.
+
+## Design principles
+
+| Principle | What it means |
+|---|---|
+| **Read-only inspection** | Do not modify disks, partitions, or filesystems. |
+| **Modular architecture** | Keep data collection, analysis, and presentation separated. |
+| **Portability** | Avoid unnecessary dependencies on a specific Linux distribution. |
+| **Transparency** | Clearly distinguish confirmed values from estimates or unavailable data. |
+| **Testability** | Validate calculations and behavior with automated tests. |
+
+## Technology
+
+lsdisk is being developed with a practical, Linux-native approach:
+
+- **Python** — application logic.
+- **Rich** — terminal presentation.
+- **Python standard library** — core APIs and supporting functionality.
+- **Linux interfaces**, including `/sys` and `/proc`, where appropriate.
+- **System utilities**, such as `lsblk` and `findmnt`, when justified.
+- **`unittest`** — initial automated testing.
+
+## Requirements
 
 - Linux
-- Python compatível com as dependências adotadas
-- Ambiente virtual Python recomendado
+- A compatible Python version for the project's dependencies
+- A Python virtual environment is recommended
 
-Algumas funcionalidades poderão depender de ferramentas ou permissões
-específicas do sistema.
+Some information may depend on available system utilities, permissions, and the storage configuration.
 
-## Desenvolvimento
+## Development status
 
-O projeto está em fase inicial de desenvolvimento.
+**lsdisk is in early development.** Features and interfaces may change as the project evolves. The roadmap below describes planned improvements; they should not be considered fully implemented.
 
-Consulte:
+### Roadmap
 
-- [Arquitetura](docs/ARCHITECTURE.md)
-- [Guia de desenvolvimento](docs/DEVELOPMENT.md)
+- [ ] **Discover unmounted partitions** — identify filesystem types without mounting partitions.
+- [ ] **Collect filesystem metadata** — retrieve labels and UUIDs when available.
+- [ ] **Improve partition identification** — distinguish recognized filesystems from partitions whose filesystem information is unavailable or not yet identified.
+- [ ] **Preserve read-only behavior** — keep storage discovery within the project's non-modifying scope.
 
-## Segurança
+These improvements are planned and are not fully implemented in version `0.1.0`.
 
-O Storix será desenvolvido para consultar informações de armazenamento.
-Operações de formatação, particionamento e alteração de sistemas de
-arquivos não fazem parte do escopo.
+## Project documentation
 
-## Licença
+- [Architecture](docs/ARCHITECTURE.md)
+- [Development guide](docs/DEVELOPMENT.md)
 
-A licença será definida antes da primeira distribuição pública.
+## Safety scope
 
-## Roadmap
+lsdisk is intended for **storage inspection only**. Formatting, partitioning, and filesystem modification are outside the project's scope.
 
-### Planned Improvements
+## License
 
-- **Unmounted partition discovery:** Identify filesystem types on partitions
-  that are not currently mounted, without mounting them.
-- **Filesystem metadata:** Collect filesystem labels and UUIDs whenever
-  the required information is available.
-- **Partition identification:** Distinguish partitions with recognized
-  filesystems from partitions whose filesystem information is unavailable
-  or has not yet been identified.
-- **Read-only inspection:** Preserve the project's read-only principle
-  throughout storage discovery.
+The project license has not yet been selected and will be defined before the first public distribution.
 
-These improvements are planned and are not fully implemented in version 0.1.0.
+---
+
+<div align="center">
+  <sub>lsdisk — making Linux storage easier to explore.</sub>
+</div>

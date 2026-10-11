@@ -5,10 +5,10 @@ from io import StringIO
 
 from rich.console import Console
 
-from storix.analyzers.filesystems import group_filesystems
-from storix.inventory import StorageInventory
-from storix.models import BlockDevice, FilesystemUsage
-from storix.ui.terminal import render_compact
+from lsdisk.analyzers.filesystems import group_filesystems
+from lsdisk.inventory import StorageInventory
+from lsdisk.models import BlockDevice, FilesystemUsage
+from lsdisk.ui.terminal import render_compact
 
 
 class TestCompactFilesystemDetails(unittest.TestCase):

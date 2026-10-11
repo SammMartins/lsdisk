@@ -1,4 +1,4 @@
-"""Tests for the Storix command-line interface."""
+"""Tests for the lsdisk command-line interface."""
 
 import json
 import unittest
@@ -6,8 +6,8 @@ from contextlib import redirect_stdout, redirect_stderr
 from io import StringIO
 from unittest.mock import patch
 
-from storix.inventory import StorageInventory
-from storix.main import build_parser, main
+from lsdisk.inventory import StorageInventory
+from lsdisk.main import build_parser, main
 
 
 class TestCommandLineParser(unittest.TestCase):
@@ -47,7 +47,7 @@ class TestCommandLineParser(unittest.TestCase):
 
 class TestCommandExecution(unittest.TestCase):
     def test_help_exits_without_collecting_inventory(self):
-        with patch("storix.main.collect_storage_inventory") as collector:
+        with patch("lsdisk.main.collect_storage_inventory") as collector:
             with redirect_stdout(StringIO()):
                 with self.assertRaises(SystemExit) as context:
                     main(["--help"])
@@ -56,7 +56,7 @@ class TestCommandExecution(unittest.TestCase):
         collector.assert_not_called()
 
     def test_version_exits_without_collecting_inventory(self):
-        with patch("storix.main.collect_storage_inventory") as collector:
+        with patch("lsdisk.main.collect_storage_inventory") as collector:
             with redirect_stdout(StringIO()):
                 with self.assertRaises(SystemExit) as context:
                     main(["--version"])
@@ -73,7 +73,7 @@ class TestCommandExecution(unittest.TestCase):
         output = StringIO()
 
         with patch(
-            "storix.main.collect_storage_inventory",
+            "lsdisk.main.collect_storage_inventory",
             return_value=inventory,
         ):
             with redirect_stdout(output):

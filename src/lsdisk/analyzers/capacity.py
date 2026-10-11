@@ -1,35 +1,35 @@
-"""Cálculos de capacidade para o Storix."""
+"""Capacity calculations for lsdisk."""
 
 from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
 class Capacity:
-    """Representa uma medição de capacidade em bytes."""
+    """Represent a capacity measurement in bytes."""
 
     total_bytes: int
     available_bytes: int
 
     def __post_init__(self) -> None:
         if self.total_bytes < 0:
-            raise ValueError("A capacidade total não pode ser negativa.")
+            raise ValueError("Total capacity cannot be negative.")
 
         if self.available_bytes < 0:
-            raise ValueError("O espaço disponível não pode ser negativo.")
+            raise ValueError("Available space cannot be negative.")
 
         if self.available_bytes > self.total_bytes:
             raise ValueError(
-                "O espaço disponível não pode superar a capacidade total."
+                "Available space cannot exceed total capacity."
             )
 
     @property
     def used_bytes(self) -> int:
-        """Calcula o espaço ocupado em bytes."""
+        """Calculate used space in bytes."""
         return self.total_bytes - self.available_bytes
 
     @property
     def used_percent(self) -> float:
-        """Calcula o percentual ocupado, de 0 a 100."""
+        """Calculate the percentage used, from 0 to 100."""
         if self.total_bytes == 0:
             return 0.0
 
@@ -37,7 +37,7 @@ class Capacity:
 
     @property
     def available_percent(self) -> float:
-        """Calcula o percentual disponível, de 0 a 100."""
+        """Calculate the percentage available, from 0 to 100."""
         if self.total_bytes == 0:
             return 0.0
 
@@ -45,9 +45,9 @@ class Capacity:
 
 
 def format_bytes(size_bytes: int) -> str:
-    """Formata bytes usando unidades binárias (KiB, MiB, GiB e TiB)."""
+    """Format bytes using binary units (KiB, MiB, GiB, and TiB)."""
     if size_bytes < 0:
-        raise ValueError("O tamanho não pode ser negativo.")
+        raise ValueError("Size cannot be negative.")
 
     value = float(size_bytes)
     units = ("B", "KiB", "MiB", "GiB", "TiB", "PiB")
@@ -61,4 +61,4 @@ def format_bytes(size_bytes: int) -> str:
 
         value /= 1024
 
-    raise AssertionError("Unidade de tamanho não encontrada.")
+    raise AssertionError("Size unit not found.")

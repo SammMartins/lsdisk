@@ -2,11 +2,11 @@
 
 import unittest
 
-from storix.analyzers.filesystems import (
+from lsdisk.analyzers.filesystems import (
     classify_filesystem,
     group_filesystems,
 )
-from storix.models import FilesystemUsage
+from lsdisk.models import FilesystemUsage
 
 
 def make_filesystem(

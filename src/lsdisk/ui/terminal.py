@@ -1,4 +1,4 @@
-"""Rich-based terminal interface for Storix."""
+"""Rich-based terminal interface for lsdisk."""
 
 from rich.console import Console
 from pathlib import Path
@@ -8,10 +8,10 @@ from rich.text import Text
 from rich.tree import Tree
 from rich.table import Table
 
-from storix.analyzers.capacity import format_bytes
-from storix.analyzers.filesystems import classify_filesystem
-from storix.inventory import StorageInventory, walk_devices
-from storix.models import BlockDevice
+from lsdisk.analyzers.capacity import format_bytes
+from lsdisk.analyzers.filesystems import classify_filesystem
+from lsdisk.inventory import StorageInventory, walk_devices
+from lsdisk.models import BlockDevice
 
 
 SUMMARY_CATEGORIES = {"persistent", "network"}
@@ -174,7 +174,7 @@ def render_simple(
 
     console.print(
         Panel(
-            "[bold cyan]Storix[/bold cyan]\n"
+            "[bold cyan]lsdisk[/bold cyan]\n"
             "Cross-distro Linux Storage Explorer",
             title="Storage Overview",
             border_style="cyan",
@@ -217,7 +217,7 @@ def render_all(
 
     console.print(
         Panel(
-            "[bold cyan]Storix[/bold cyan]\n"
+            "[bold cyan]lsdisk[/bold cyan]\n"
             "Complete storage inventory",
             title="Storage Overview",
             border_style="cyan",
@@ -592,7 +592,7 @@ def render_compact(
     console.print(
         Panel(
             Text.assemble(
-                ("Storix", "bold cyan"),
+                ("lsdisk", "bold cyan"),
                 ("  Linux Storage Explorer", "white"),
             ),
             border_style="cyan",

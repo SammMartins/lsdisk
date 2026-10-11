@@ -1,8 +1,8 @@
-"""Tests for Storix data models."""
+"""Tests for lsdisk data models."""
 
 import unittest
 
-from storix.models import BlockDevice, FilesystemUsage
+from lsdisk.models import BlockDevice, FilesystemUsage
 
 
 class TestBlockDevice(unittest.TestCase):

@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from storix.models import BlockDevice
+from lsdisk.models import BlockDevice
 
 
 SYSFS_BLOCK_PATH = Path("/sys/class/block")

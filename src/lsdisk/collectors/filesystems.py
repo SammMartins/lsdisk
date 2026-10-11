@@ -4,7 +4,7 @@ import os
 import re
 from pathlib import Path
 
-from storix.models import FilesystemUsage
+from lsdisk.models import FilesystemUsage
 
 
 MOUNTINFO_PATH = Path("/proc/self/mountinfo")

@@ -1,75 +1,106 @@
-# Arquitetura do Storix
+# Architecture
 
-## 1. Visão geral
+lsdisk is a Linux storage inventory application built around a simple principle: collect facts from the host, normalize them, analyze them carefully, and present them without hiding uncertainty.
 
-O Storix utiliza uma arquitetura modular, priorizando bibliotecas e
-APIs Python. Ferramentas externas serão utilizadas quando oferecerem
-informações que não sejam obtidas de forma simples e confiável por
-meio das interfaces Python disponíveis.
+## Design goals
 
-A interface não deve depender diretamente dos mecanismos de coleta.
+- **Cross-distribution:** avoid unnecessary assumptions about a particular Linux distribution.
+- **Read-only inspection:** do not modify disks, partitions, or filesystems.
+- **Data integrity:** distinguish physical devices, partitions, filesystem capacity, and mountpoints.
+- **Graceful degradation:** missing interfaces or inaccessible information should not crash the entire inventory where recovery is possible.
+- **Testability:** keep core logic separable from the developer's real storage devices and terminal.
 
-## 2. Fluxo de dados
+## Data flow
 
-1. Coleta: obtém informações sobre dispositivos e sistemas de arquivos.
-2. Normalização: converte os resultados para modelos internos comuns.
-3. Análise: calcula indicadores e identifica limitações dos dados.
-4. Apresentação: exibe os resultados na interface de terminal.
+```text
+Linux interfaces and available tools
+                 |
+                 v
+             Collectors
+                 |
+                 v
+       Normalized data models
+                 |
+                 v
+              Analyzers
+                 |
+          +------+------+
+          |             |
+          v             v
+      Terminal UI    JSON output
+```
 
-## 3. Componentes planejados
+Collection and presentation are separate responsibilities. The UI should consume the normalized inventory rather than call operating-system interfaces directly.
+
+## Components
 
 ### Collectors
 
-Responsáveis pela coleta de informações.
-
-- Dispositivos de bloco e partições.
-- Pontos de montagem.
-- Capacidade e ocupação dos sistemas de arquivos.
-- Informações complementares do kernel e das ferramentas disponíveis.
+Collectors retrieve information from the running system, including block devices, partitions, mountpoints, and capacity statistics. A collector should handle unavailable or malformed data deliberately and avoid assuming that every device has a mounted filesystem.
 
 ### Models
 
-Define os modelos internos utilizados para representar dispositivos,
-partições, sistemas de arquivos e medições.
+Models provide consistent representations of block devices and filesystem measurements. They preserve distinctions such as total capacity, free space, and space available to an unprivileged user where the source provides those values.
 
 ### Analyzers
 
-Calcula percentuais e organiza os indicadores de armazenamento.
-Deve distinguir valores medidos, indisponíveis e não aplicáveis.
+Analyzers classify and group filesystem records and calculate derived indicators. They must preserve unknown values and avoid misleading totals, particularly when multiple mountpoints refer to the same underlying filesystem.
 
-### UI
+### Inventory orchestration
 
-Apresenta os dados com tabelas, painéis, barras de progresso e árvores
-hierárquicas utilizando Rich.
+The inventory layer combines collector results, associates filesystem sources with discovered devices where possible, and exposes a unified structure to the output layers.
 
-## 4. Fontes de dados
+### Serialization
 
-A coleta poderá utilizar:
+The serialization layer converts the normalized inventory into machine-readable JSON. Output modes should have explicit, testable contracts.
 
-- os.statvfs(): estatísticas de sistemas de arquivos acessíveis.
-- /sys: informações expostas pelo kernel sobre dispositivos.
-- /proc: informações do sistema e das montagens.
-- lsblk: hierarquia dos dispositivos de bloco.
-- findmnt: informações sobre pontos de montagem.
-- udev: propriedades de dispositivos, quando necessário e disponível.
+### Terminal UI
 
-A disponibilidade de cada fonte será verificada em tempo de execução.
+The terminal layer uses Rich to render concise summaries, expanded filesystem details, tables, and utilization bars. It should not be responsible for discovering devices or interpreting raw kernel data.
 
-## 5. Regras de integridade
+## Data sources
 
-- Não confundir capacidade física com espaço disponível em um sistema
-  de arquivos.
-- Não considerar uma partição não montada como vazia.
-- Não somar indiscriminadamente dispositivos físicos e virtuais.
-- Não presumir que todas as partições possuem sistemas de arquivos.
-- Tratar separadamente tecnologias como Btrfs, LVM, RAID e LUKS.
-- Identificar quando uma medição não puder ser realizada.
-- Não exigir privilégios administrativos sem necessidade comprovada.
+lsdisk prioritizes Python and Linux interfaces, using external tools when they provide necessary or more reliable information.
 
-## 6. Escopo
+| Source | Intended use |
+| --- | --- |
+| `/sys` | Kernel-exposed block-device properties and relationships. |
+| `/proc/self/mountinfo` | Mountpoints, filesystem sources, and mount metadata for the current process. |
+| `os.statvfs()` | Capacity statistics for accessible mounted filesystems. |
+| `lsblk` | Potential fallback or verification source for block-device topology. |
+| `findmnt` | Potential supplementary source for mount information. |
+| `udev` | Potential source of device properties when available. |
 
-A plataforma inicial é Linux, com foco em compatibilidade entre
-distribuições.
+Availability and behavior can vary across systems. External tools should be checked before use, and their output should be parsed defensively.
 
-O suporte a sistemas de arquivos e camadas de armazenamento especiais
-será implementado e validado incrementalmente.
+## Integrity rules
+
+### Physical devices are not filesystems
+
+A drive's physical capacity and a filesystem's usable capacity are different measurements. The interface must not present them as interchangeable.
+
+### Unmounted does not mean empty
+
+An unmounted partition may contain a filesystem even when its usage cannot be measured through `statvfs()`. Until it is identified through a reliable source, its filesystem status should remain unknown.
+
+### Avoid double-counting
+
+A physical device, a partition, a logical storage layer, and a mounted filesystem can represent related views of the same storage. Btrfs subvolumes can also expose the same filesystem capacity through multiple mountpoints. Group related records where identity is sufficiently established, and do not sum them indiscriminately.
+
+### Unknown is a valid result
+
+If a value cannot be collected reliably, preserve that uncertainty. Do not substitute zero, infer an empty filesystem, or display a guess as confirmed data.
+
+### Least privilege
+
+Read-only inventory collection should not require administrative privileges by default. Any future requirement for elevated access must be justified and documented.
+
+## Current scope and planned work
+
+The current MVP discovers block-device topology and collects capacity information for mounted filesystems. The following are planned improvements, not guarantees of the current implementation:
+
+- Filesystem identification on unmounted partitions.
+- More complete filesystem label and UUID collection.
+- Broader, validated handling of Btrfs, LVM, RAID, and LUKS storage layers.
+
+These capabilities should be introduced incrementally, with tests for both successful detection and unavailable information.

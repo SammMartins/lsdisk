@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from storix.collectors.filesystems import (
+from lsdisk.collectors.filesystems import (
     _parse_mountinfo_line,
     _unescape_mountinfo,
     collect_filesystems,

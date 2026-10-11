@@ -4,7 +4,7 @@ import unittest
 from contextlib import redirect_stderr
 from io import StringIO
 
-from storix.main import build_parser
+from lsdisk.main import build_parser
 
 
 class TestTableModeOptions(unittest.TestCase):

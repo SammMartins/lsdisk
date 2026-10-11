@@ -1,4 +1,4 @@
-"""Core data models for Storix."""
+"""Core data models for lsdisk."""
 
 from dataclasses import dataclass, field
 

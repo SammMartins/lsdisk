@@ -1,4 +1,4 @@
-"""Command-line entry point for Storix."""
+"""Command-line entry point for lsdisk."""
 
 import argparse
 import json
@@ -6,10 +6,10 @@ import sys
 from collections.abc import Sequence
 from importlib.metadata import PackageNotFoundError, version
 
-from storix import __version__
-from storix.inventory import collect_storage_inventory
-from storix.serialization import inventory_to_dict
-from storix.ui.terminal import (
+from lsdisk import __version__
+from lsdisk.inventory import collect_storage_inventory
+from lsdisk.serialization import inventory_to_dict
+from lsdisk.ui.terminal import (
     create_console,
     render_all,
     render_compact,
@@ -20,7 +20,7 @@ from storix.ui.terminal import (
 def _get_version() -> str:
     """Return the installed package version when available."""
     try:
-        return version("storix")
+        return version("lsdisk")
     except PackageNotFoundError:
         return __version__
 
@@ -28,15 +28,15 @@ def _get_version() -> str:
 def build_parser() -> argparse.ArgumentParser:
     """Build the command-line argument parser."""
     parser = argparse.ArgumentParser(
-        prog="storix",
+        prog="lsdisk",
         description="Explore Linux storage devices, partitions, and filesystems.",
         epilog=(
             "Examples:\n"
-            "  storix\n"
-            "  storix --all\n"
-            "  storix -T\n"
-            "  storix --all --json\n"
-            "  storix --color never"
+            "  lsdisk\n"
+            "  lsdisk --all\n"
+            "  lsdisk -T\n"
+            "  lsdisk --all --json\n"
+            "  lsdisk --color never"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -92,14 +92,14 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """Run Storix."""
+    """Run lsdisk."""
     parser = build_parser()
     args = parser.parse_args(argv)
 
     try:
         inventory = collect_storage_inventory()
     except (OSError, RuntimeError, ValueError) as exc:
-        print(f"storix: error: {exc}", file=sys.stderr)
+        print(f"lsdisk: error: {exc}", file=sys.stderr)
         return 1
 
     if args.json:
