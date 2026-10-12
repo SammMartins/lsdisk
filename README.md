@@ -2,7 +2,6 @@
 
   <img src="img/lsdisk.png" alt="lsdisk — Linux Storage Explorer" width="760">
 
-  <h1>lsdisk</h1>
   <p><strong>Cross-distro Linux Storage Explorer</strong></p>
   <p>Understand your disks, partitions, and filesystems — clearly, safely, and from the terminal.</p>
 
