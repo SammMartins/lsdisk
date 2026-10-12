@@ -13,77 +13,130 @@
 
 **lsdisk** is a Linux storage inspection tool designed to make information about HDDs, SSDs, partitions, and filesystems easier to understand.
 
-It aims to present technical storage details in a clear, structured terminal interface, helping users explore how their storage is organized without needing to interpret raw system output manually.
+It brings storage topology and filesystem capacity information together in a structured terminal interface. lsdisk is read-only: it inspects storage and does not format, partition, mount, or modify filesystems.
 
-> **Read-only by design.** lsdisk is intended to inspect storage, not modify it.
+## Features
 
-## Why lsdisk?
+- **Physical storage inventory** — show detected disks and their child partitions in a hierarchical view.
+- **Device details** — display device names, capacity, model, physical/virtual classification, and HDD or SSD/Flash indicators when the system provides enough information.
+- **Filesystem capacity** — report total, used, free, and user-available capacity for accessible mounted filesystems.
+- **Mountpoint visibility** — associate filesystem information with mountpoints where the relationship can be established.
+- **Filesystem grouping** — group related filesystem records to avoid repeating capacity for multiple mountpoints, including supported Btrfs subvolume cases.
+- **Utilization bars** — display a compact visual usage bar and percentage in the terminal. The filled bar and percentage use utilization colors: green below 70%, yellow from 70% to below 90%, and red at 90% or above.
+- **Multiple output modes** — provide a compact default view, expanded output, table output, and JSON output.
+- **Graceful handling of missing data** — distinguish unavailable information from a confirmed zero value.
 
-Linux provides powerful tools for inspecting storage, but their output can be fragmented across commands and system interfaces. lsdisk aims to bring relevant information together in one place and make the relationships between physical devices, partitions, and filesystems easier to follow.
-
-### Key goals
-
-- **Explore storage devices** — identify disks and understand how their partitions relate to them.
-- **Understand capacity** — present total capacity, used space, and available space where the data is accessible.
-- **Inspect filesystem information** — distinguish recognized filesystems from information that is unavailable or not yet identified.
-- **Find unmounted partitions** — work toward identifying filesystem types without mounting partitions.
-- **Read information at a glance** — use terminal colors, tables, progress bars, and hierarchical views.
-- **Support multiple Linux distributions** — minimize reliance on distribution-specific behavior.
+Capacity values depend on the information available from the running Linux system. Physical disk capacity and mounted filesystem capacity describe different layers and should not be treated as interchangeable.
 
 ## Design principles
 
 | Principle | What it means |
 |---|---|
 | **Read-only inspection** | Do not modify disks, partitions, or filesystems. |
-| **Modular architecture** | Keep data collection, analysis, and presentation separated. |
+| **Modular architecture** | Keep data collection, analysis, serialization, and presentation separated. |
 | **Portability** | Avoid unnecessary dependencies on a specific Linux distribution. |
-| **Transparency** | Clearly distinguish confirmed values from estimates or unavailable data. |
+| **Transparency** | Distinguish confirmed values from estimates or unavailable data. |
 | **Testability** | Validate calculations and behavior with automated tests. |
 
 ## Technology
 
-lsdisk is being developed with a practical, Linux-native approach:
-
 - **Python** — application logic.
-- **Rich** — terminal presentation.
+- **Rich** — terminal presentation and colored utilization bars.
 - **Python standard library** — core APIs and supporting functionality.
 - **Linux interfaces**, including `/sys` and `/proc`, where appropriate.
-- **System utilities**, such as `lsblk` and `findmnt`, when justified.
-- **`unittest`** — initial automated testing.
+- **`os.statvfs()`** — mounted filesystem capacity statistics.
+- **`unittest`** — automated testing.
 
 ## Requirements
 
 - Linux
-- A compatible Python version for the project's dependencies
-- A Python virtual environment is recommended
+- Python 3.11 or newer
+- `curl` and `tar` for the shell installer
 
-Some information may depend on available system utilities, permissions, and the storage configuration.
+The installer creates an isolated Python virtual environment and installs the Python dependencies. Some storage information may depend on available system interfaces, permissions, and the storage configuration.
+
+## Installation
+
+The installation script downloads lsdisk, creates an isolated Python virtual environment, and installs the `lsdisk` command for the current user:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/SammMartins/lsdisk/main/install.sh | bash
+```
+
+The installer does not require `sudo` and refuses to run as root. By default, it stores application data in `~/.local/share/lsdisk` and the executable in `~/.local/bin`. If `~/.local/bin` is not in your `PATH`, follow the instruction printed by the installer.
+
+Run lsdisk:
+
+```bash
+lsdisk
+```
+
+Show available options:
+
+```bash
+lsdisk --help
+```
+
+To install from a different branch, set `LSDISK_BRANCH` before running the installer:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/SammMartins/lsdisk/main/install.sh | LSDISK_BRANCH=main bash
+```
+
+## Uninstallation
+
+If `uninstall.sh` is available locally, run it as your regular user, without `sudo`:
+
+```bash
+bash uninstall.sh
+```
+
+The uninstaller removes the per-user launcher and application data directory. It does not delete the local Git repository or project source files.
+
+## Usage
+
+```bash
+lsdisk
+lsdisk --all
+lsdisk --table-mode
+lsdisk --json
+lsdisk --help
+```
+
+- `lsdisk` displays the default compact storage view.
+- `lsdisk --all` displays expanded inventory details, including additional devices and mount information.
+- `lsdisk --table-mode` selects table output.
+- `lsdisk --json` emits machine-readable JSON without terminal UI formatting.
+- `lsdisk --help` lists the options supported by the installed version.
+
+Use the output of `lsdisk --help` as the source of truth for the options available in a specific release.
 
 ## Development status
 
-**lsdisk is in early development.** Features and interfaces may change as the project evolves. The roadmap below describes planned improvements; they should not be considered fully implemented.
+**lsdisk is in early development.** Features and interfaces may change as the project evolves. The current implementation focuses on block-device topology and capacity information for mounted filesystems.
 
 ### Roadmap
 
-- [ ] **Discover unmounted partitions** — identify filesystem types without mounting partitions.
-- [ ] **Collect filesystem metadata** — retrieve labels and UUIDs when available.
-- [ ] **Improve partition identification** — distinguish recognized filesystems from partitions whose filesystem information is unavailable or not yet identified.
-- [ ] **Preserve read-only behavior** — keep storage discovery within the project's non-modifying scope.
+- [ ] Identify filesystem types on unmounted partitions without mounting them.
+- [ ] Collect filesystem labels and UUIDs more completely.
+- [ ] Improve identification of partitions whose filesystem information is unavailable.
+- [ ] Expand validated handling of Btrfs, LVM, RAID, LUKS, and other storage layers.
 
-These improvements are planned and are not fully implemented in version `0.1.0`.
+These items are planned improvements, not guarantees of the current implementation.
 
 ## Project documentation
 
 - [Architecture](docs/ARCHITECTURE.md)
 - [Development guide](docs/DEVELOPMENT.md)
+- [Changelog](CHANGELOG.md)
 
 ## Safety scope
 
-lsdisk is intended for **storage inspection only**. Formatting, partitioning, and filesystem modification are outside the project's scope.
+lsdisk is intended for **storage inspection only**. Formatting, partitioning, filesystem modification, and automatic mounting are outside the project's scope.
 
 ## License
 
-The project license has not yet been selected and will be defined before the first public distribution.
+lsdisk is distributed under the [MIT License](LICENSE).
 
 ---
 

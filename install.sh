@@ -6,7 +6,7 @@ set -Eeuo pipefail
 # Cross-distro Linux Storage Explorer
 
 REPO="SammMartins/lsdisk"
-BRANCH="${LSDISK_BRANCH:-master}"
+BRANCH="${LSDISK_BRANCH:-main}"
 
 INSTALL_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/lsdisk"
 BIN_DIR="${XDG_BIN_HOME:-$HOME/.local/bin}"
@@ -36,8 +36,8 @@ fi
 
 # Check Python version.
 python3 -c \
-    'import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)' ||
-    fail "Python 3.10 or newer is required."
+    'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)' ||
+    fail "Python 3.11 or newer is required."
 
 # Check virtual environment support.
 python3 -c 'import venv' ||
@@ -77,10 +77,16 @@ if [[ ! -x "$VENV_DIR/bin/python" ]]; then
         fail "Unable to create the Python virtual environment."
 fi
 
+# Ensure pip is available inside the virtual environment.
+"$VENV_DIR/bin/python" -m pip --version >/dev/null 2>&1 ||
+    fail "pip is missing from the virtual environment. Install Python venv/pip support for your distribution."
+
 log "Installing lsdisk and its dependencies..."
 
 "$VENV_DIR/bin/python" -m pip install \
     --disable-pip-version-check \
+    --upgrade \
+    --force-reinstall \
     "$PROJECT_DIR" ||
     fail "Installation failed. Check the Python dependencies."
 

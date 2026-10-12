@@ -1,123 +1,168 @@
 # Development Guide
 
-This guide describes the local development workflow for lsdisk. The project is in early development, so keep changes small, tested, and easy to review.
+This guide describes the local development workflow for lsdisk. The
+project targets Linux and is intended to work across distributions
+rather than depend on one distribution's package layout.
 
-## 1. Development environment
+## 1. Requirements
 
-lsdisk targets Linux and requires Python 3.11 or newer.
+-   Linux
+-   Python 3.11 or newer
+-   Git
+-   `curl` and `tar` are needed for the user-facing shell installer, but
+    not for ordinary test execution
 
-From the repository root:
+## 2. Create the development environment
 
-```bash
+Run these commands from the repository root:
+
+``` bash
 python --version
 python -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -e .
+.venv/bin/python -m pip install --upgrade pip
+.venv/bin/python -m pip install -e .
 ```
 
-Confirm that the virtual environment is active:
+Using `.venv/bin/python` directly avoids accidentally running tests with
+the system interpreter if shell activation is not working as expected.
 
-```bash
+If you prefer activation, use:
+
+``` bash
+source .venv/bin/activate
 which python
 python --version
 ```
 
-The Python executable should resolve to the project's `.venv` directory. Keep project dependencies isolated from the system Python installation.
+The executable should resolve to the `.venv` directory inside the
+current repository. If the repository has moved since the virtual
+environment was created, recreate `.venv`; virtual environments can
+retain references to their original location.
 
-## 2. Run lsdisk
+## 3. Run lsdisk
 
-With the virtual environment activated:
+From the repository root:
 
-```bash
-lsdisk --help
-lsdisk
-lsdisk --all
-lsdisk --table-mode
-lsdisk --json
+``` bash
+.venv/bin/lsdisk --help
+.venv/bin/lsdisk
+.venv/bin/lsdisk --all
+.venv/bin/lsdisk --table-mode
+.venv/bin/lsdisk --json
 ```
 
-Use `lsdisk --help` as the source of truth for the options available in the current checkout.
+Alternatively, activate `.venv` and use `lsdisk` directly. Check
+`lsdisk --help` for the options available in the current checkout.
 
-## 3. Run tests
+## 4. Run tests and checks
 
-Run the full test suite from the repository root:
+Run the complete test suite:
 
-```bash
-python -m unittest discover -s tests -v
+``` bash
+.venv/bin/python -m unittest discover -s tests -v
 ```
 
-Tests should prefer controlled fixtures and mocked system interfaces over dependence on the developer's actual disks. This makes the results repeatable and reduces the risk of accidentally relying on one machine's storage layout.
+Compile Python source and tests:
 
-Test coverage should include, where relevant:
+``` bash
+.venv/bin/python -m compileall -q src tests
+```
 
-- Capacity calculations, units, percentages, zero values, and invalid input.
-- Device discovery, parent/child relationships, and physical-versus-virtual classification.
-- Mount information parsing and filesystem capacity collection.
-- Filesystem classification and grouping, including Btrfs subvolumes.
-- JSON serialization and CLI behavior.
-- Missing, inaccessible, or malformed system information.
+Check the patch for whitespace problems:
 
-## 4. Architecture and implementation workflow
+``` bash
+git diff --check
+```
+
+Tests should prefer controlled fixtures and mocked system interfaces
+over dependence on the developer's actual disks. This makes results
+repeatable and avoids relying on one machine's storage layout.
+
+Relevant test areas include:
+
+-   Capacity calculations, units, percentages, zero values, and invalid
+    input.
+-   Device discovery, parent/child relationships, and
+    physical-versus-virtual classification.
+-   Mount information parsing and filesystem capacity collection.
+-   Filesystem classification and grouping, including Btrfs subvolumes.
+-   JSON serialization and CLI behavior.
+-   Terminal output, utilization color thresholds, percentage clamping,
+    and unavailable capacity.
+-   Missing, inaccessible, or malformed system information.
+
+## 5. Architecture and implementation workflow
 
 Keep the main responsibilities separated:
 
-1. **Collectors** gather information from Linux interfaces and available tools.
-2. **Models** represent devices and filesystem measurements consistently.
-3. **Analyzers** interpret and group collected data without inventing missing values.
-4. **Serialization** exposes structured output such as JSON.
-5. **UI** presents the inventory without coupling the terminal interface to collection details.
+1.  **Collectors** gather information from Linux interfaces and
+    available tools.
+2.  **Models** represent devices and filesystem measurements
+    consistently.
+3.  **Analyzers** interpret and group collected data without inventing
+    missing values.
+4.  **Serialization** exposes structured output such as JSON.
+5.  **UI** presents the inventory without coupling terminal presentation
+    to collection details.
 
 For each change:
 
-1. Define a narrow objective.
-2. Inspect the relevant code and tests before editing.
-3. Add or update tests for the behavior.
-4. Implement the smallest coherent change.
-5. Run the relevant tests, then the full test suite.
-6. Review the diff and document limitations or decisions that affect future work.
+1.  Define a narrow objective.
+2.  Inspect the relevant code and tests before editing.
+3.  Add or update tests for the behavior.
+4.  Implement the smallest coherent change.
+5.  Run relevant tests, then the full test suite.
+6.  Review the diff and document limitations or decisions that affect
+    future work.
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for the data flow and integrity constraints.
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the data flow and integrity
+constraints.
 
-## 5. Safety and data integrity
+## 6. Safety and data integrity
 
-lsdisk is an inspection tool. Development and tests must not format, partition, modify filesystems, or automatically mount storage devices.
+lsdisk is an inspection tool. Development and tests must not format,
+partition, modify filesystems, or automatically mount storage devices.
 
 Follow these rules:
 
-- Do not treat an unmounted partition as empty.
-- Do not report unavailable data as a confirmed zero.
-- Do not add together physical capacity and the capacity of logical layers without accounting for their relationship.
-- Avoid requiring root privileges unless a concrete requirement is documented and reviewed.
-- Prefer native Python and Linux interfaces when they provide reliable information; use external commands as justified fallbacks.
+-   Do not treat an unmounted partition as empty.
+-   Do not report unavailable data as a confirmed zero.
+-   Do not add physical capacity and logical-layer capacity together
+    without accounting for their relationship.
+-   Avoid requiring root privileges unless a concrete requirement is
+    documented and reviewed.
+-   Prefer native Python and Linux interfaces when they provide reliable
+    information; use external commands as justified fallbacks.
+-   Keep installation and uninstallation scoped to the current user's
+    lsdisk files.
 
-## 6. Git workflow
+## 7. Git workflow
 
 Before staging:
 
-```bash
-git status
+``` bash
+git status --short
 git diff --check
 git diff
 ```
 
-Stage only the intended files, then inspect what will be committed:
+Stage only intended files, then inspect the staged changes:
 
-```bash
+``` bash
 git add <paths>
 git diff --cached --check
 git diff --cached --stat
 git diff --cached
 ```
 
-Use a descriptive commit message, for example:
+Do not commit virtual environments, caches, local secrets, or
+machine-specific output. Do not include unrelated changes in the same
+commit.
 
-```text
-feat: identify filesystems on unmounted partitions
-```
+## 8. Current limitations
 
-Do not commit virtual environments, caches, local secrets, or machine-specific output.
-
-## 7. Current limitations
-
-Filesystem discovery on unmounted partitions, complete label/UUID collection, and broader handling of storage layers are roadmap items. Do not describe these capabilities as complete until they have been implemented and covered by tests.
+The current MVP discovers block-device topology and collects capacity
+information for mounted filesystems. Filesystem identification on
+unmounted partitions, complete label/UUID collection, and broader
+handling of storage layers are planned improvements. Do not describe
+these capabilities as complete until implemented and covered by tests.

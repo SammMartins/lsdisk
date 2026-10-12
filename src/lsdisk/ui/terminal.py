@@ -286,7 +286,7 @@ def _usage_color(percentage: float) -> str:
     """Select a color based on filesystem utilization."""
     if percentage >= 90:
         return "red"
-    if percentage >= 75:
+    if percentage >= 70:
         return "yellow"
     return "green"
 
@@ -316,7 +316,7 @@ def _groups_by_source(inventory: StorageInventory):
     return result
 
 
-def _usage_bar(used: int, total: int, width: int = 36) -> Text:
+def _usage_bar(used: int, total: int, width: int = 24) -> Text:
     """Create a compact text-based utilization bar."""
     bar = Text()
 
@@ -329,7 +329,10 @@ def _usage_bar(used: int, total: int, width: int = 36) -> Text:
 
     bar.append("█" * filled, style=_usage_color(percentage))
     bar.append("░" * (width - filled), style="dim")
-    bar.append(f"  {_percentage(used, total)}")
+    bar.append(
+        f"  {percentage:.1f}%",
+        style=_usage_color(percentage),
+    )
     return bar
 
 
@@ -392,13 +395,20 @@ def _add_compact_device(
                     f"{format_bytes(group.used_bytes)} used",
                     style=_usage_color(percentage),
                 )
-                usage.append(
-                    f" ({_percentage(group.used_bytes, group.total_bytes)})"
-                )
+                #usage.append(
+                #    f" ({_percentage(group.used_bytes, group.total_bytes)})"
+                #)
                 usage.append(
                     f"  |  {format_bytes(group.available_bytes)} available"
                 )
                 node.add(usage)
+                node.add(
+                    _usage_bar(
+                        group.used_bytes,
+                        group.total_bytes,
+                        width=24,
+                    )
+                )
 
                 mounts = ", ".join(group.mountpoints) or "Not mounted"
                 mount_text = Text("Mounts: ", style="dim")
@@ -453,7 +463,7 @@ def _render_compact_summary(
         )
         summary.append("Used: ", style="dim")
         summary.append(
-            f"{format_bytes(used)} ({_percentage(used, total)})",
+            f"{format_bytes(used)}", # ({_percentage(used, total)})",
             style=_usage_color(used / total * 100),
         )
         summary.append(
