@@ -7,6 +7,18 @@
 
 </div>
 
+<div align="center">
+
+  <p>
+    <a href="https://github.com/SammMartins/lsdisk/releases/latest"><img src="https://img.shields.io/github/v/release/SammMartins/lsdisk?color=blue" alt="Latest Release"></a>
+    <a href="https://github.com/SammMartins/lsdisk/blob/main/LICENSE"><img src="https://img.shields.io/github/license/SammMartins/lsdisk?color=green" alt="License"></a>
+    <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-3.8%2B-blue?logo=python&logoColor=white" alt="Python"></a>
+    <a href="https://www.kernel.org/"><img src="https://img.shields.io/badge/platform-linux-lightgrey?logo=linux&logoColor=white" alt="Platform"></a>
+    <a href="https://github.com/SammMartins/lsdisk/stargazers"><img src="https://img.shields.io/github/stars/SammMartins/lsdisk?color=yellow" alt="GitHub Stars"></a>
+  </p>
+
+</div>
+
 ---
 
 ## About lsdisk
@@ -14,6 +26,12 @@
 **lsdisk** is a Linux storage inspection tool designed to make information about HDDs, SSDs, partitions, and filesystems easier to understand.
 
 It brings storage topology and filesystem capacity information together in a structured terminal interface. lsdisk is read-only: it inspects storage and does not format, partition, mount, or modify filesystems.
+
+<br>
+
+![lsdisk Demo](./img/lsdisk_0_1_1.gif)
+
+<p><sub><em>Live demonstration of lsdisk v0.1.1 inspecting Linux storage devices in the terminal.</em></sub></p>
 
 ## Features
 
