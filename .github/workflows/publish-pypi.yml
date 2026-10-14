@@ -1,12 +1,17 @@
+
 name: Publish lsdisk to PyPI
 
 on:
   release:
     types: [published]
+  workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
 
     steps:
       - uses: actions/checkout@v4
@@ -19,12 +24,14 @@ jobs:
       - name: Install build dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install build
+          python -m pip install build
+
+      - name: Install test dependencies
+        run: |
+          python -m pip install .
 
       - name: Run tests
-        run: |
-          pip install .
-          python -m unittest discover -s tests -v
+        run: python -m unittest discover -s tests -v
 
       - name: Build package
         run: python -m build
