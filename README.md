@@ -1,6 +1,8 @@
- <div align="center">
+# lsdisk — Linux Storage Explorer
 
-  <img src="img/lsdisk.png" alt="lsdisk — Linux Storage Explorer" width="760">
+<div align="center">
+
+  <img src="https://raw.githubusercontent.com/SammMartins/lsdisk/main/img/lsdisk.png" alt="lsdisk — Linux Storage Explorer" width="760">
 
   <p><strong>Cross-distro Linux Storage Explorer</strong></p>
   <p>Understand your disks, partitions, and filesystems — clearly, safely, and from the terminal.</p>
@@ -12,6 +14,7 @@
   <p>
     <a href="https://github.com/SammMartins/lsdisk/releases/latest"><img src="https://img.shields.io/github/v/release/SammMartins/lsdisk?color=blue" alt="Latest Release"></a>
     <a href="https://pypi.org/project/lsdisk/"><img src="https://img.shields.io/pypi/v/lsdisk?color=blue" alt="PyPI Version"></a>
+    <a href="https://copr.fedorainfracloud.org/coprs/sammmartins/lsdisk/"><img src="https://img.shields.io/badge/Fedora-COPR-blue?logo=fedora&logoColor=white" alt="Fedora COPR"></a>
     <a href="https://github.com/SammMartins/lsdisk/blob/main/LICENSE"><img src="https://img.shields.io/github/license/SammMartins/lsdisk?color=green" alt="License"></a>
     <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-3.11%2B-blue?logo=python&logoColor=white" alt="Python"></a>
     <a href="https://img.shields.io/badge/platform-linux-lightgrey?logo=linux&logoColor=white"><img src="https://img.shields.io/badge/platform-linux-lightgrey?logo=linux&logoColor=white" alt="Platform"></a>
@@ -30,9 +33,9 @@
 - [Technology](#technology)
 - [Requirements](#requirements)
 - [Installation](#installation)
-  - [Install from PyPI](#install-from-pypi)
   - [Install using the shell script](#install-using-the-shell-script)
-  - [Install from a specific branch](#install-from-a-specific-branch)
+  - [Install from PyPI](#install-from-pypi)
+  - [Install using Fedora COPR](#install-using-fedora-copr)
 - [Usage](#usage)
 - [Uninstallation](#uninstallation)
 - [Development Status](#development-status)
@@ -50,7 +53,7 @@ It brings storage topology and filesystem capacity information together in a str
 
 lsdisk is read-only: it inspects storage and does not format, partition, mount, or modify filesystems.
 
-![lsdisk Demo](./img/lsdisk_0_1_1.gif)
+![lsdisk Demo](https://raw.githubusercontent.com/SammMartins/lsdisk/main/img/lsdisk_0_1_1.gif)
 
 <p><sub><em>Live demonstration of lsdisk v0.1.1 inspecting Linux storage devices in the terminal.</em></sub></p>
 
@@ -97,42 +100,7 @@ Some storage information may depend on available system interfaces, permissions,
 
 ## Installation
 
-Choose one of the following installation methods.
-
-### Install from PyPI
-
-The recommended option for users who want to install lsdisk through Python's package ecosystem.
-
-Install using pip:
-
-```bash
-python -m pip install lsdisk
-```
-
-If you use `pipx`, you can install lsdisk in an isolated environment:
-
-```bash
-pipx install lsdisk
-```
-
-Verify the installation:
-
-```bash
-lsdisk --version
-lsdisk --help
-```
-
-To upgrade to the latest published version:
-
-```bash
-python -m pip install --upgrade lsdisk
-```
-
-If you installed with `pipx`, upgrade using:
-
-```bash
-pipx upgrade lsdisk
-```
+Choose the installation method that best fits your Linux distribution and environment.
 
 ### Install using the shell script
 
@@ -144,19 +112,73 @@ curl -sSL https://raw.githubusercontent.com/SammMartins/lsdisk/main/install.sh |
 
 The installer does not require `sudo` and refuses to run as root.
 
-By default, it stores application data in `~/.local/share/lsdisk` and the executable in `~/.local/bin`.
+By default, application files are stored in `~/.local/share/lsdisk`, and the executable is installed in `~/.local/bin`.
 
 If `~/.local/bin` is not in your `PATH`, follow the instructions printed by the installer.
 
-### Install from a specific branch
-
-To install from a different branch, set `LSDISK_BRANCH` before running the installer:
+Verify the installation:
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/SammMartins/lsdisk/main/install.sh | LSDISK_BRANCH=main bash
+lsdisk --version
+lsdisk --help
 ```
 
-Use this option when testing a development branch. For regular use, prefer the published PyPI package or the default stable branch.
+### Install from PyPI
+
+You can also install lsdisk through Python's package ecosystem.
+
+Using `pipx`:
+
+```bash
+pipx install lsdisk
+```
+
+Using `pip` in a Python environment where pip is available:
+
+```bash
+python -m pip install lsdisk
+```
+
+To upgrade a pipx installation:
+
+```bash
+pipx upgrade lsdisk
+```
+
+To upgrade a pip installation:
+
+```bash
+python -m pip install --upgrade lsdisk
+```
+
+If `pip` or `pipx` is not available, install the required tool using your distribution's package manager or use the shell script above.
+
+### Install using Fedora COPR
+
+Fedora users can install lsdisk through the community-maintained COPR repository.
+
+**COPR repository:** [sammmartins/lsdisk](https://copr.fedorainfracloud.org/coprs/sammmartins/lsdisk/)
+
+Enable the repository:
+
+```bash
+sudo dnf copr enable sammmartins/lsdisk
+```
+
+Install the package:
+
+```bash
+sudo dnf install python3-lsdisk
+```
+
+Verify the installation:
+
+```bash
+lsdisk --version
+lsdisk --help
+```
+
+The initial COPR build targets Fedora 44 x86_64. Support for additional Fedora releases and architectures depends on the available build configurations.
 
 ## Usage
 
@@ -185,6 +207,16 @@ Use the output of `lsdisk --help` as the source of truth for the options availab
 
 ## Uninstallation
 
+### Shell script installation
+
+If `uninstall.sh` is available locally, run it as your regular user, without `sudo`:
+
+```bash
+bash uninstall.sh
+```
+
+The uninstaller removes the per-user launcher and application data directory. It does not delete the local Git repository or project source files.
+
 ### PyPI or pip installation
 
 If you installed lsdisk using pip, uninstall it from the same Python environment:
@@ -199,15 +231,21 @@ If you installed it with pipx:
 pipx uninstall lsdisk
 ```
 
-### Shell script installation
+### Fedora COPR installation
 
-If `uninstall.sh` is available locally, run it as your regular user, without `sudo`:
+Remove the RPM package:
 
 ```bash
-bash uninstall.sh
+sudo dnf remove python3-lsdisk
 ```
 
-The uninstaller removes the per-user launcher and application data directory. It does not delete the local Git repository or project source files.
+To disable the COPR repository:
+
+```bash
+sudo dnf copr disable sammmartins/lsdisk
+```
+
+Disabling the repository does not remove the installed package. Remove the package separately if necessary.
 
 ## Development Status
 
