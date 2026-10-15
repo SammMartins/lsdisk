@@ -16,8 +16,8 @@
     <a href="https://pypi.org/project/lsdisk/"><img src="https://img.shields.io/pypi/v/lsdisk?color=blue" alt="PyPI Version"></a>
     <a href="https://copr.fedorainfracloud.org/coprs/sammmartins/lsdisk/"><img src="https://img.shields.io/badge/Fedora-COPR-blue?logo=fedora&logoColor=white" alt="Fedora COPR"></a>
     <a href="https://github.com/SammMartins/lsdisk/blob/main/LICENSE"><img src="https://img.shields.io/github/license/SammMartins/lsdisk?color=green" alt="License"></a>
-    <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-3.11%2B-blue?logo=python&logoColor=white" alt="Python"></a>
-    <a href="https://img.shields.io/badge/platform-linux-lightgrey?logo=linux&logoColor=white"><img src="https://img.shields.io/badge/platform-linux-lightgrey?logo=linux&logoColor=white" alt="Platform"></a>
+    <a href="https://img.shields.io/badge/python-3.11%2B-blue?logo=python&logoColor=white"><img src="https://img.shields.io/badge/python-3.11%2B-blue?logo=python&logoColor=white" alt="Python"></a>
+    <a href="https://www.kernel.org/"><img src="https://img.shields.io/badge/platform-linux-lightgrey?logo=linux&logoColor=white" alt="Platform"></a>
     <a href="https://github.com/SammMartins/lsdisk/stargazers"><img src="https://img.shields.io/github/stars/SammMartins/lsdisk?color=yellow" alt="GitHub Stars"></a>
   </p>
 
@@ -33,9 +33,10 @@
 - [Technology](#technology)
 - [Requirements](#requirements)
 - [Installation](#installation)
-  - [Install using the shell script](#install-using-the-shell-script)
+  - [Debian and Ubuntu Package](#debian-and-ubuntu-package)
+  - [Install Using the Shell Script](#install-using-the-shell-script)
   - [Install from PyPI](#install-from-pypi)
-  - [Install using Fedora COPR](#install-using-fedora-copr)
+  - [Install Using Fedora COPR](#install-using-fedora-copr)
 - [Usage](#usage)
 - [Uninstallation](#uninstallation)
 - [Development Status](#development-status)
@@ -94,7 +95,12 @@ Capacity values depend on the information available from the running Linux syste
 - Linux
 - Python 3.11 or newer
 
-The shell installer additionally requires `curl` and `tar`.
+Additional requirements depend on the installation method:
+
+- **Debian/Ubuntu package:** Python 3.11+ and the distribution's `python3-rich` package.
+- **Shell installer:** `curl`, `tar`, Python 3.11+, and access to the required download sources.
+- **PyPI:** Python 3.11+ and a supported Python installation tool.
+- **Fedora COPR:** a supported Fedora release and the dependencies specified by the RPM package.
 
 Some storage information may depend on available system interfaces, permissions, and the storage configuration.
 
@@ -102,7 +108,34 @@ Some storage information may depend on available system interfaces, permissions,
 
 Choose the installation method that best fits your Linux distribution and environment.
 
-### Install using the shell script
+### Debian and Ubuntu Package
+
+The GitHub Release provides an architecture-independent `.deb` package for Debian and Ubuntu systems that meet the package requirements.
+
+The package targets Debian 12 or newer and Ubuntu 24.04 or newer, provided Python 3.11+ and the distribution package `python3-rich` are available.
+
+1. Open the [lsdisk GitHub Releases page](https://github.com/SammMartins/lsdisk/releases).
+2. Download the `.deb` file attached to the release you want.
+3. Open a terminal in the directory containing the downloaded file and install it:
+
+```bash
+sudo apt install ./lsdisk_0.1.1_all.deb
+```
+
+Replace the filename with the exact name of the downloaded package if you are installing a different release.
+
+Verify the installation:
+
+```bash
+lsdisk --version
+lsdisk --help
+```
+
+The package installs the `lsdisk` command system-wide. The package manager handles the declared dependencies and tracks the installed files.
+
+**Important:** This is direct `.deb` installation, not a signed APT repository. You must download the package from the Releases page before using `apt install ./...`. The package is not available through the default Debian or Ubuntu repositories.
+
+### Install Using the Shell Script
 
 The official installation script downloads lsdisk, creates an isolated Python virtual environment, and installs the `lsdisk` command for the current user.
 
@@ -122,6 +155,8 @@ Verify the installation:
 lsdisk --version
 lsdisk --help
 ```
+
+This method is suitable for Linux distributions that meet the Python and system requirements, without relying on a distribution-specific package.
 
 ### Install from PyPI
 
@@ -153,7 +188,7 @@ python -m pip install --upgrade lsdisk
 
 If `pip` or `pipx` is not available, install the required tool using your distribution's package manager or use the shell script above.
 
-### Install using Fedora COPR
+### Install Using Fedora COPR
 
 Fedora users can install lsdisk through the community-maintained COPR repository.
 
@@ -207,7 +242,25 @@ Use the output of `lsdisk --help` as the source of truth for the options availab
 
 ## Uninstallation
 
-### Shell script installation
+Use the instructions for the installation method you selected.
+
+### Debian and Ubuntu Package
+
+Remove the installed package:
+
+```bash
+sudo apt remove lsdisk
+```
+
+To remove the package and its package-manager configuration files, if any:
+
+```bash
+sudo apt purge lsdisk
+```
+
+The `purge` command does not remove user data outside the package's managed files.
+
+### Shell Script Installation
 
 If `uninstall.sh` is available locally, run it as your regular user, without `sudo`:
 
@@ -217,7 +270,7 @@ bash uninstall.sh
 
 The uninstaller removes the per-user launcher and application data directory. It does not delete the local Git repository or project source files.
 
-### PyPI or pip installation
+### PyPI or pip Installation
 
 If you installed lsdisk using pip, uninstall it from the same Python environment:
 
@@ -231,7 +284,7 @@ If you installed it with pipx:
 pipx uninstall lsdisk
 ```
 
-### Fedora COPR installation
+### Fedora COPR Installation
 
 Remove the RPM package:
 

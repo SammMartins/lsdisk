@@ -6,7 +6,6 @@ import sys
 from collections.abc import Sequence
 from importlib.metadata import PackageNotFoundError, version
 
-from lsdisk import __version__
 from lsdisk.inventory import collect_storage_inventory
 from lsdisk.serialization import inventory_to_dict
 from lsdisk.ui.terminal import (
@@ -22,6 +21,10 @@ def _get_version() -> str:
     try:
         return version("lsdisk")
     except PackageNotFoundError:
+        try:
+            from lsdisk._version import __version__
+        except ModuleNotFoundError:
+            return "unknown"
         return __version__
 
 
