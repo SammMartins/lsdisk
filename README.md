@@ -152,23 +152,22 @@ The package installs the `lsdisk` command system-wide. The package manager handl
 
 ### Install Using the Shell Script
 
-The official installation script downloads lsdisk, creates an isolated Python virtual environment, and installs the `lsdisk` command for the current user.
+The official installation script downloads lsdisk from GitHub, creates an isolated Python virtual environment, and installs the `lsdisk` command for the current user.
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/SammMartins/lsdisk/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/SammMartins/lsdisk/main/install.sh | bash
 ```
 
-The installer does not require `sudo` and refuses to run as root.
+The installer does not require `sudo` and refuses to run as root. By default, application files are stored in `~/.local/share/lsdisk`, and the executable launcher is installed in `~/.local/bin`.
 
-By default, application files are stored in `~/.local/share/lsdisk`, and the executable is installed in `~/.local/bin`.
-
-If `~/.local/bin` is not in your `PATH`, follow the instructions printed by the installer.
+If `~/.local/bin` is not in your `PATH`, follow the instructions printed by the installer or add the directory to your shell configuration.
 
 Verify the installation:
 
 ```bash
 lsdisk --version
 lsdisk --help
+lsdisk --all --json
 ```
 
 This method is suitable for Linux distributions that meet the Python and system requirements, without relying on a distribution-specific package.
@@ -284,13 +283,15 @@ The `purge` command does not remove user data outside the package's managed file
 
 ### Shell Script Installation
 
-If `uninstall.sh` is available locally, run it as your regular user, without `sudo`:
+Download and run the official uninstaller as the same regular user who installed lsdisk. Do not use `sudo`:
 
 ```bash
-bash uninstall.sh
+curl -fsSL https://raw.githubusercontent.com/SammMartins/lsdisk/main/uninstall.sh \
+  -o /tmp/lsdisk-uninstall.sh
+bash /tmp/lsdisk-uninstall.sh
 ```
 
-The uninstaller removes the per-user launcher and application data directory. It does not delete the local Git repository or project source files.
+The uninstaller removes the per-user launcher (`~/.local/bin/lsdisk`) and application data directory (`~/.local/share/lsdisk`). It does not remove the local Git repository or project source files. If you customized `XDG_BIN_HOME` or `XDG_DATA_HOME` during installation, use the same values when running the uninstaller.
 
 ### PyPI or pip Installation
 
@@ -334,9 +335,12 @@ metadata probing, and capacity information for mounted filesystems.
 - [ ] Improve identification of partitions whose filesystem information is unavailable.
 - [x] Add deterministic, read-only relationship discovery for LVM PV/VG/LV
   layers and Linux MD RAID arrays where system metadata verifies them.
-- [ ] Complete advanced storage-layer accounting and broader validation for
-  Btrfs multi-device filesystems, LVM extents, RAID usable capacity and
-  rebuild state, LUKS layers, and additional Linux configurations.
+- [ ] Validate LVM and Linux MD RAID discovery against real storage
+  configurations and across supported Linux distributions; current automated
+  coverage does not replace end-to-end testing on real arrays and volume groups.
+- [ ] Complete advanced storage-layer accounting for Btrfs multi-device
+  filesystems, LVM extents, RAID usable capacity and rebuild state, LUKS
+  layers, and additional Linux configurations.
 - [ ] Improve the UI and UX.
 
 These items are planned improvements, not guarantees of the current implementation.
