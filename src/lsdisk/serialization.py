@@ -2,10 +2,10 @@
 
 from typing import Any
 
-from lsdisk.analyzers.capacity import format_bytes
-from lsdisk.analyzers.filesystems import classify_filesystem
-from lsdisk.inventory import StorageInventory
-from lsdisk.models import BlockDevice, FilesystemUsage
+from lsdisk import format_bytes
+from lsdisk import classify_filesystem
+from lsdisk import StorageInventory
+from lsdisk import BlockDevice, FilesystemUsage
 
 
 SUMMARY_CATEGORIES = {"persistent", "network"}

@@ -8,7 +8,7 @@ from rich.console import Console
 from lsdisk.analyzers.filesystems import group_filesystems
 from lsdisk.inventory import StorageInventory
 from lsdisk.models import BlockDevice, FilesystemUsage
-from lsdisk.ui.terminal import render_compact
+from lsdisk.ui.terminal import render_all, render_compact
 from lsdisk.ui.terminal import (
     _usage_bar,
     _usage_color,
@@ -17,6 +17,37 @@ from lsdisk.ui.terminal import (
 
 
 class TestCompactFilesystemDetails(unittest.TestCase):
+    def test_summary_deduplicates_verified_physical_aliases(self):
+        devices = [
+            BlockDevice(
+                name="null-a",
+                path="/dev/null",
+                device_type="disk",
+                size_bytes=10_000,
+                physical=True,
+            ),
+            BlockDevice(
+                name="null-b",
+                path="/dev/../dev/null",
+                device_type="disk",
+                size_bytes=10_000,
+                physical=True,
+            ),
+        ]
+        inventory = StorageInventory(
+            devices=devices,
+            filesystems=[],
+            filesystem_groups=[],
+        )
+        output = StringIO()
+        console = Console(file=output, width=100, force_terminal=False)
+
+        render_compact(inventory, console)
+
+        rendered = output.getvalue()
+        self.assertIn("Physical disks: 1", rendered)
+        self.assertIn("Physical capacity: 9.77 KiB", rendered)
+
     def test_groups_mountpoints_and_shows_btrfs_subvolumes(self):
         disk = BlockDevice(
             name="sda",
@@ -90,6 +121,69 @@ class TestCompactFilesystemDetails(unittest.TestCase):
         # The filesystem source must appear once in the grouped details.
         details = rendered.split("Filesystem Details", 1)[1]
         self.assertEqual(details.count("/dev/sda1"), 1)
+
+    def test_all_mode_shows_nonpersistent_mounts_and_image_warning(self):
+        image = FilesystemUsage(
+            mountpoint="/opt/example",
+            source="/opt/example.dwarfs",
+            filesystem_type="fuse.dwarfs",
+            total_bytes=100,
+            free_bytes=0,
+            available_bytes=0,
+            device_id="0:91",
+        )
+        temporary = FilesystemUsage(
+            mountpoint="/run",
+            source="tmpfs",
+            filesystem_type="tmpfs",
+            total_bytes=100,
+            free_bytes=50,
+            available_bytes=40,
+            device_id="0:26",
+        )
+        inventory = StorageInventory(
+            devices=[],
+            filesystems=[image, temporary],
+            filesystem_groups=group_filesystems([image, temporary]),
+        )
+
+        output = StringIO()
+        console = Console(file=output, width=120, force_terminal=False)
+
+        render_compact(inventory, console, include_all=True)
+        rendered = output.getvalue()
+
+        self.assertIn("Application Image", rendered)
+        self.assertIn("/opt/example", rendered)
+        self.assertIn("Temporary", rendered)
+        self.assertIn("100.0%", rendered)
+        self.assertIn("does not indicate a full physical disk", rendered)
+
+
+    def test_detailed_mount_view_does_not_present_zero_capacity_as_measurement(self):
+        filesystem = FilesystemUsage(
+            mountpoint="/unavailable",
+            source="unknown",
+            filesystem_type="unknownfs",
+            total_bytes=0,
+            free_bytes=0,
+            available_bytes=0,
+        )
+        inventory = StorageInventory(
+            devices=[],
+            filesystems=[filesystem],
+            filesystem_groups=group_filesystems([filesystem]),
+        )
+        output = StringIO()
+        console = Console(file=output, width=120, force_terminal=False)
+
+        render_all(inventory, console)
+
+        rendered = output.getvalue()
+        self.assertIn("Unavailable", rendered)
+        self.assertIn("N/A", rendered)
+        self.assertNotIn("0 B", rendered)
+
 
 class TestUsageBar(unittest.TestCase):
     def test_usage_color_thresholds(self):

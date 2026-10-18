@@ -90,6 +90,7 @@ Relevant test areas include:
 -   Terminal output, utilization color thresholds, percentage clamping,
     and unavailable capacity.
 -   Missing, inaccessible, or malformed system information.
+-   Read-only `blkid` probing, including unmounted filesystems, missing tools, and probe timeouts.
 
 ## 5. Architecture and implementation workflow
 
@@ -162,7 +163,8 @@ commit.
 ## 8. Current limitations
 
 The current MVP discovers block-device topology and collects capacity
-information for mounted filesystems. Filesystem identification on
-unmounted partitions, complete label/UUID collection, and broader
-handling of storage layers are planned improvements. Do not describe
-these capabilities as complete until implemented and covered by tests.
+information for mounted filesystems. Read-only `blkid` probing now
+collects filesystem signatures, labels, and UUIDs when available,
+including on unmounted devices. Coverage across storage layers and
+distributions still requires validation; do not describe that broader
+compatibility as complete until implemented and tested.

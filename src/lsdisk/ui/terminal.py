@@ -8,13 +8,29 @@ from rich.text import Text
 from rich.tree import Tree
 from rich.table import Table
 
-from lsdisk.analyzers.capacity import format_bytes
-from lsdisk.analyzers.filesystems import classify_filesystem
+from lsdisk.analyzers.capacity import capacity_owners, format_bytes
+from lsdisk.analyzers.filesystems import (
+    classify_filesystem,
+    filesystem_identity,
+)
 from lsdisk.inventory import StorageInventory, walk_devices
 from lsdisk.models import BlockDevice
 
 
 SUMMARY_CATEGORIES = {"persistent", "network"}
+CATEGORY_LABELS = {
+    "persistent": "Persistent Storage",
+    "network": "Network",
+    "application_image": "Application Image",
+    "temporary": "Temporary",
+    "virtual": "Virtual",
+    "unknown": "Unknown",
+}
+
+
+def _category_label(category: str) -> str:
+    """Return the human-readable label for a filesystem category."""
+    return CATEGORY_LABELS.get(category, category.replace("_", " ").title())
 
 
 def create_console(color: str = "auto") -> Console:
@@ -150,14 +166,19 @@ def _add_group_rows(
         if not include_all and category not in SUMMARY_CATEGORIES:
             continue
 
+        total = group.total_bytes
         table.add_row(
             filesystem.filesystem_type,
-            category.title(),
+            _category_label(category),
             filesystem.source,
-            format_bytes(group.total_bytes),
-            format_bytes(group.used_bytes),
-            format_bytes(group.available_bytes),
-            f"{filesystem.used_percent:.1f}%",
+            format_bytes(total) if total > 0 else "Unavailable",
+            format_bytes(group.used_bytes) if total > 0 else "Unavailable",
+            (
+                format_bytes(group.available_bytes)
+                if total > 0
+                else "Unavailable"
+            ),
+            f"{filesystem.used_percent:.1f}%" if total > 0 else "N/A",
             ", ".join(group.mountpoints),
         )
         count += 1
@@ -234,15 +255,20 @@ def render_all(
 
     mounts = _mount_table()
     for filesystem in inventory.filesystems:
+        total = filesystem.total_bytes
         mounts.add_row(
             filesystem.mountpoint,
             filesystem.filesystem_type,
-            classify_filesystem(filesystem).title(),
+            _category_label(classify_filesystem(filesystem)),
             filesystem.source,
-            format_bytes(filesystem.total_bytes),
-            format_bytes(filesystem.used_bytes),
-            format_bytes(filesystem.available_bytes),
-            f"{filesystem.used_percent:.1f}%",
+            format_bytes(total) if total > 0 else "Unavailable",
+            format_bytes(filesystem.used_bytes) if total > 0 else "Unavailable",
+            (
+                format_bytes(filesystem.available_bytes)
+                if total > 0
+                else "Unavailable"
+            ),
+            f"{filesystem.used_percent:.1f}%" if total > 0 else "N/A",
             filesystem.device_id or "Unknown",
             filesystem.filesystem_root,
         )
@@ -436,14 +462,10 @@ def _render_compact_summary(
 ) -> None:
     """Display hardware counts and unique local filesystem capacity."""
     devices = list(walk_devices(inventory.devices))
-    physical_disks = [
-        device for device in devices if device.is_physical_disk
-    ]
+    physical_disks = capacity_owners(inventory.devices)
     partitions = [device for device in devices if device.is_partition]
 
-    physical_capacity = sum(
-        device.size_bytes for device in physical_disks
-    )
+    physical_capacity = sum(device.size_bytes for device in physical_disks)
 
     groups = _local_filesystem_groups(inventory)
     total = sum(group.total_bytes for group in groups)
@@ -498,8 +520,10 @@ def _render_compact_mounts(
     category_order = {
         "persistent": 0,
         "network": 1,
-        "virtual": 2,
-        "unknown": 3,
+        "application_image": 2,
+        "temporary": 3,
+        "virtual": 4,
+        "unknown": 5,
     }
 
     groups = sorted(
@@ -521,7 +545,7 @@ def _render_compact_mounts(
         label.append(filesystem.filesystem_type, style="bold cyan")
         label.append("  ")
         label.append(filesystem.source, style="bold")
-        label.append(f"  [{category}] ", style="dim")
+        label.append(f"  [{_category_label(category)}] ", style="dim")
         label.append(f"  {format_bytes(group.total_bytes)}")
 
         node = root.add(label)
@@ -551,22 +575,20 @@ def _render_compact_mounts(
                 )
             )
 
-        identity = (
-            filesystem.device_id or filesystem.source,
-            filesystem.filesystem_type,
-            filesystem.source,
-        )
+        if category == "application_image":
+            node.add(
+                Text(
+                    "Application image usage; 100% does not indicate a full physical disk",
+                    style="dim",
+                )
+            )
+
+        identity = filesystem_identity(filesystem)
 
         mounts = [
             item
             for item in inventory.filesystems
-            if (
-                (
-                    item.device_id or item.source,
-                    item.filesystem_type,
-                    item.source,
-                ) == identity
-            )
+            if filesystem_identity(item) == identity
         ]
 
         for item in sorted(mounts, key=lambda mount: mount.mountpoint):

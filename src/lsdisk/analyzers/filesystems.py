@@ -5,9 +5,20 @@ from dataclasses import dataclass, field
 from lsdisk.models import FilesystemUsage
 
 
+APPLICATION_IMAGE_FILESYSTEMS = {
+    "fuse.dwarfs",
+    "dwarfs",
+}
+
+TEMPORARY_FILESYSTEMS = {
+    "ramfs",
+    "tmpfs",
+}
+
 VIRTUAL_FILESYSTEMS = {
     "autofs",
     "bpf",
+    "binfmt_misc",
     "cgroup",
     "cgroup2",
     "configfs",
@@ -18,11 +29,11 @@ VIRTUAL_FILESYSTEMS = {
     "fusectl",
     "hugetlbfs",
     "mqueue",
+    "overlay",
     "proc",
     "pstore",
     "securityfs",
     "sysfs",
-    "tmpfs",
     "tracefs",
 }
 
@@ -75,9 +86,35 @@ class FilesystemGroup:
         return self.representative.available_bytes
 
 
+def filesystem_identity(filesystem: FilesystemUsage) -> tuple[str, str, str]:
+    """Return the conservative identity used for filesystem capacity groups."""
+    if filesystem.device_id:
+        return (
+            "device-id",
+            filesystem.device_id,
+            filesystem.filesystem_type,
+        )
+    return (
+        "source",
+        filesystem.source,
+        filesystem.filesystem_type,
+    )
+
+
 def classify_filesystem(filesystem: FilesystemUsage) -> str:
     """Classify a filesystem without hiding unrecognized types."""
-    filesystem_type = filesystem.filesystem_type.lower()
+    filesystem_type = filesystem.filesystem_type.strip().lower()
+    source = filesystem.source.strip().lower()
+
+    if (
+        filesystem_type in APPLICATION_IMAGE_FILESYSTEMS
+        or filesystem_type.startswith("fuse.dwarfs.")
+        or source.endswith((".dwarfs", ".appimage"))
+    ):
+        return "application_image"
+
+    if filesystem_type in TEMPORARY_FILESYSTEMS:
+        return "temporary"
 
     if filesystem_type in VIRTUAL_FILESYSTEMS:
         return "virtual"
@@ -98,11 +135,7 @@ def group_filesystems(
     groups: dict[tuple[str, str, str], FilesystemGroup] = {}
 
     for filesystem in filesystems:
-        identity = (
-            filesystem.device_id or filesystem.source,
-            filesystem.filesystem_type,
-            filesystem.source,
-        )
+        identity = filesystem_identity(filesystem)
 
         group = groups.get(identity)
 

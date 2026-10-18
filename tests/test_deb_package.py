@@ -111,6 +111,8 @@ class TestDebPackage(unittest.TestCase):
             self.assertIn(f"./usr/lib/lsdisk/lsdisk/{source_file}", contents)
         self.assertNotIn("__pycache__", contents)
         self.assertNotIn(".pyc", contents)
+        self.assertIn("./usr/lib/lsdisk/pyproject.toml", contents)
+        self.assertNotIn("_version.py", contents)
 
     def test_extracted_cli_reports_version_and_help(self):
         system_python = Path("/usr/bin/python3")
@@ -131,13 +133,26 @@ class TestDebPackage(unittest.TestCase):
             executable = extracted / "usr/bin/lsdisk"
             self.assertTrue(executable.stat().st_mode & 0o111)
 
+
             version_result = subprocess.run(
                 [str(executable), "--version"],
-                check=True,
+                check=False,
                 capture_output=True,
                 text=True,
             )
-            self.assertEqual(version_result.stdout.strip(), f"lsdisk {self.version}")
+            self.assertEqual(
+                version_result.returncode,
+                0,
+                msg=(
+                    f"stdout:\n{version_result.stdout}\n"
+                    f"stderr:\n{version_result.stderr}"
+                ),
+            )
+            self.assertEqual(
+                version_result.stdout.strip(),
+                f"lsdisk {self.version}",
+            )
+
 
             help_result = subprocess.run(
                 [str(executable), "--help"],

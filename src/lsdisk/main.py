@@ -4,11 +4,10 @@ import argparse
 import json
 import sys
 from collections.abc import Sequence
-from importlib.metadata import PackageNotFoundError, version
 
-from lsdisk.inventory import collect_storage_inventory
-from lsdisk.serialization import inventory_to_dict
-from lsdisk.ui.terminal import (
+from lsdisk import collect_storage_inventory
+from lsdisk import inventory_to_dict
+from lsdisk import (
     create_console,
     render_all,
     render_compact,
@@ -17,15 +16,10 @@ from lsdisk.ui.terminal import (
 
 
 def _get_version() -> str:
-    """Return the installed package version when available."""
-    try:
-        return version("lsdisk")
-    except PackageNotFoundError:
-        try:
-            from lsdisk._version import __version__
-        except ModuleNotFoundError:
-            return "unknown"
-        return __version__
+    """Return the package version."""
+    from lsdisk import __version__
+
+    return __version__
 
 
 def build_parser() -> argparse.ArgumentParser:

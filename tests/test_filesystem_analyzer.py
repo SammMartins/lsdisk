@@ -39,14 +39,82 @@ class TestFilesystemClassification(unittest.TestCase):
             "persistent",
         )
 
-    def test_classifies_tmpfs_as_virtual(self):
+    def test_classifies_tmpfs_as_temporary(self):
         filesystem = make_filesystem(
             "/run",
             filesystem_type="tmpfs",
             source="tmpfs",
             device_id="0:26",
         )
+        self.assertEqual(classify_filesystem(filesystem), "temporary")
+
+    def test_classifies_ramfs_as_temporary(self):
+        filesystem = make_filesystem(
+            "/run/ramfs",
+            filesystem_type="ramfs",
+            source="ramfs",
+            device_id="0:27",
+        )
+        self.assertEqual(classify_filesystem(filesystem), "temporary")
+
+    def test_classifies_dwarfs_as_application_image(self):
+        filesystem = make_filesystem(
+            "/opt/example",
+            filesystem_type="fuse.dwarfs",
+            source="/opt/example.dwarfs",
+            device_id="0:91",
+            total_bytes=100,
+            free_bytes=0,
+            available_bytes=0,
+        )
+        self.assertEqual(
+            classify_filesystem(filesystem),
+            "application_image",
+        )
+
+    def test_classifies_kernel_filesystems_as_virtual(self):
+        for filesystem_type in (
+            "proc",
+            "sysfs",
+            "cgroup2",
+            "debugfs",
+            "tracefs",
+            "binfmt_misc",
+        ):
+            filesystem = make_filesystem(
+                f"/{filesystem_type}",
+                filesystem_type=filesystem_type,
+                source=filesystem_type,
+                device_id="0:1",
+            )
+            with self.subTest(filesystem_type=filesystem_type):
+                self.assertEqual(
+                    classify_filesystem(filesystem),
+                    "virtual",
+                )
+
+    def test_classifies_container_overlay_as_virtual(self):
+        filesystem = make_filesystem(
+            "/var/lib/containers/storage/overlay",
+            filesystem_type="overlay",
+            source="overlay",
+            device_id="0:42",
+        )
         self.assertEqual(classify_filesystem(filesystem), "virtual")
+
+    def test_keeps_desktop_fuse_filesystems_conservatively_unknown(self):
+        for filesystem_type in ("fuse.gvfsd-fuse", "fuse.portal"):
+            filesystem = make_filesystem(
+                "/run/user/1000/mount",
+                filesystem_type=filesystem_type,
+                source=filesystem_type,
+                device_id="0:43",
+            )
+            with self.subTest(filesystem_type=filesystem_type):
+                self.assertEqual(
+                    classify_filesystem(filesystem),
+                    "unknown",
+                )
 
     def test_classifies_network_filesystem(self):
         filesystem = make_filesystem(
@@ -99,6 +167,31 @@ class TestFilesystemGrouping(unittest.TestCase):
         groups = group_filesystems(filesystems)
 
         self.assertEqual(len(groups), 2)
+
+    def test_groups_verified_device_aliases_without_duplicate_capacity(self):
+        filesystems = [
+            make_filesystem(
+                "/data",
+                source="/dev/sda1",
+                device_id="8:1",
+            ),
+            make_filesystem(
+                "/data-alias",
+                source="/dev/disk/by-id/test",
+                device_id="8:1",
+                filesystem_root="/@alias",
+            ),
+        ]
+        groups = group_filesystems(filesystems)
+        self.assertEqual(len(groups), 1)
+        self.assertEqual(groups[0].mountpoints, ["/data", "/data-alias"])
+
+    def test_keeps_same_device_id_different_filesystem_types_separate(self):
+        filesystems = [
+            make_filesystem("/one", filesystem_type="ext4", device_id="8:1"),
+            make_filesystem("/two", filesystem_type="xfs", device_id="8:1"),
+        ]
+        self.assertEqual(len(group_filesystems(filesystems)), 2)
 
 
 if __name__ == "__main__":

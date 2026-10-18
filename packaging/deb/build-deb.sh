@@ -27,7 +27,7 @@ if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
 fi
 
 # If a GitHub Release tag is provided, validate it against the project version.
-# Accepted examples: v0.1.1 and 0.1.1.
+# Accepted examples: v0.1.2 and 0.1.2.
 if [[ -n "${RELEASE_TAG:-}" ]]; then
     if [[ ! "$RELEASE_TAG" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+$ ||
         ( "$RELEASE_TAG" != "$VERSION" && "$RELEASE_TAG" != "v${VERSION}" ) ]]; then
@@ -61,12 +61,9 @@ mkdir -p "$OUTPUT_DIR"
 # Copy Python source files.
 cp -a src/lsdisk "$PKG_ROOT/usr/lib/lsdisk/"
 
-# Keep the Debian-installed CLI versioned even though this package is not a wheel.
-cat > "$PKG_ROOT/usr/lib/lsdisk/lsdisk/_version.py" <<EOF
-"""Build-generated package version."""
-
-__version__ = "${VERSION}"
-EOF
+# Keep the project metadata available to the package when Debian is extracted
+# before installation, where importlib.metadata cannot find a .dist-info file.
+cp pyproject.toml "$PKG_ROOT/usr/lib/lsdisk/pyproject.toml"
 
 # Remove Python bytecode and cache directories.
 find "$PKG_ROOT/usr/lib/lsdisk" -type d -name '__pycache__' -prune -exec rm -rf {} +

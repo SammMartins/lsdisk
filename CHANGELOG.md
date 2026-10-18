@@ -4,9 +4,35 @@ All notable changes to lsdisk are documented in this file.
 
 This project follows [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.1.2] - Unreleased
 
-Changes planned or made after the latest versioned release will be recorded here.
+### Added
+
+- Added read-only filesystem metadata collection for unmounted block devices,
+  including filesystem labels, UUIDs, and recognized storage signatures.
+- Added explicit filesystem probe outcomes for recognized signatures, no
+  signature, unavailable probes, and malformed or failed probes.
+- Added canonical device identity and conservative storage relationship
+  discovery for partitions, encrypted mappings, LVM PV/VG/LV layers, and
+  Linux MD RAID arrays when the available metadata verifies them.
+
+### Changed
+
+- Improved physical-capacity ownership so physical disks are counted once
+  while partitions and logical storage layers remain visible in detailed
+  inventory.
+- Improved filesystem grouping and relationship handling for aliases,
+  duplicate references, incomplete metadata, and invalid topology.
+- Preserved read-only behavior and safely degrade when optional interfaces or
+  tools are unavailable.
+
+### Validation
+
+- Added deterministic regression coverage for filesystem probes, canonical
+  identities, storage relationships, LVM and MD RAID metadata handling, and
+  capacity ownership.
+- Real-system LVM and RAID integration validation remains outside this
+  release preparation.
 
 ## [0.1.1] - 2026-10-12
 

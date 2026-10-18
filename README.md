@@ -62,9 +62,13 @@ lsdisk is read-only: it inspects storage and does not format, partition, mount, 
 
 - **Physical storage inventory** — show detected disks and their child partitions in a hierarchical view.
 - **Device details** — display device names, capacity, model, physical/virtual classification, and HDD or SSD/Flash indicators when the system provides enough information.
+- **Filesystem metadata** — identify filesystem signatures on unmounted block devices and collect labels and UUIDs when available, without mounting them.
 - **Filesystem capacity** — report total, used, free, and user-available capacity for accessible mounted filesystems.
 - **Mountpoint visibility** — associate filesystem information with mountpoints where the relationship can be established.
 - **Filesystem grouping** — group related filesystem records to avoid repeating capacity for multiple mountpoints, including supported Btrfs subvolume cases.
+- **Filesystem classification** — distinguish persistent storage, network,
+  application-image, temporary, virtual, and unknown filesystems without
+  hiding their mountpoints.
 - **Utilization bars** — display a compact visual usage bar and percentage in the terminal. Green indicates below 70% utilization, yellow indicates 70% to below 90%, and red indicates 90% or higher.
 - **Multiple output modes** — provide a compact default view, expanded output, table output, and JSON output.
 - **Graceful handling of missing data** — distinguish unavailable information from a confirmed zero value.
@@ -114,15 +118,28 @@ The GitHub Release provides an architecture-independent `.deb` package for Debia
 
 The package targets Debian 12 or newer and Ubuntu 24.04 or newer, provided Python 3.11+ and the distribution package `python3-rich` are available.
 
-1. Open the [lsdisk GitHub Releases page](https://github.com/SammMartins/lsdisk/releases).
-2. Download the `.deb` file attached to the release you want.
-3. Open a terminal in the directory containing the downloaded file and install it:
+**Important:** This is direct `.deb` installation, not a signed APT repository. You must download the package from the Releases page before using `apt install ./...`. The package is not available through the default Debian or Ubuntu repositories.
+
+#### Option 1: Manual Download
+
+1. Go to the [lsdisk GitHub Releases](https://github.com/SammMartins/lsdisk/releases) page.
+2. Download the `.deb` file from the latest release.
+3. Open a terminal in the directory where the file was downloaded and run:
 
 ```bash
-sudo apt install ./lsdisk_0.1.1_all.deb
+sudo apt install ./lsdisk_*.deb
 ```
 
-Replace the filename with the exact name of the downloaded package if you are installing a different release.
+#### Option 2: Download and install directly via terminal (Latest Version)
+Alternatively, you can fetch the latest `.deb` package and install it using a single command:
+
+```bash
+curl -s https://api.github.com/repos/SammMartins/lsdisk/releases/latest \
+  | grep "browser_download_url.*deb" \
+  | cut -d : -f 2,3 \
+  | tr -d ' "' \
+  | xargs curl -LO && sudo apt install ./lsdisk_*.deb
+```
 
 Verify the installation:
 
@@ -132,8 +149,6 @@ lsdisk --help
 ```
 
 The package installs the `lsdisk` command system-wide. The package manager handles the declared dependencies and tracks the installed files.
-
-**Important:** This is direct `.deb` installation, not a signed APT repository. You must download the package from the Releases page before using `apt install ./...`. The package is not available through the default Debian or Ubuntu repositories.
 
 ### Install Using the Shell Script
 
@@ -236,7 +251,14 @@ lsdisk --help
 - `lsdisk --all` displays expanded inventory details, including additional devices and mount information.
 - `lsdisk --table-mode` selects table output.
 - `lsdisk --json` emits machine-readable JSON without terminal UI formatting.
+- `lsdisk --all --json` includes every discovered mount and exposes its
+  stable lowercase `category` (`persistent`, `network`,
+  `application_image`, `temporary`, `virtual`, or `unknown`).
 - `lsdisk --help` lists the options supported by the installed version.
+
+Application-image capacity is retained for inspection, but its usage is not
+included in physical-storage summaries; a read-only image reported at 100%
+does not mean a physical disk is full.
 
 Use the output of `lsdisk --help` as the source of truth for the options available in a specific release.
 
@@ -304,14 +326,18 @@ Disabling the repository does not remove the installed package. Remove the packa
 
 **lsdisk is in early development.** Features and interfaces may change as the project evolves.
 
-The current implementation focuses on block-device topology and capacity information for mounted filesystems.
+The current implementation covers block-device topology, read-only filesystem
+metadata probing, and capacity information for mounted filesystems.
 
 ### Roadmap
 
-- [ ] Identify filesystem types on unmounted partitions without mounting them.
-- [ ] Collect filesystem labels and UUIDs more completely.
 - [ ] Improve identification of partitions whose filesystem information is unavailable.
-- [ ] Expand validated handling of Btrfs, LVM, RAID, LUKS, and other storage layers.
+- [x] Add deterministic, read-only relationship discovery for LVM PV/VG/LV
+  layers and Linux MD RAID arrays where system metadata verifies them.
+- [ ] Complete advanced storage-layer accounting and broader validation for
+  Btrfs multi-device filesystems, LVM extents, RAID usable capacity and
+  rebuild state, LUKS layers, and additional Linux configurations.
+- [ ] Improve the UI and UX.
 
 These items are planned improvements, not guarantees of the current implementation.
 

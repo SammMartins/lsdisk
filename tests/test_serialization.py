@@ -69,7 +69,27 @@ def make_inventory():
         device_id="0:26",
     )
 
-    filesystems = [btrfs_root, btrfs_subvolume, tmpfs]
+    overlay = FilesystemUsage(
+        mountpoint="/var/lib/containers/storage/overlay",
+        source="overlay",
+        filesystem_type="overlay",
+        total_bytes=0,
+        free_bytes=0,
+        available_bytes=0,
+        device_id="0:42",
+    )
+
+    image = FilesystemUsage(
+        mountpoint="/opt/example",
+        source="/opt/example.dwarfs",
+        filesystem_type="fuse.dwarfs",
+        total_bytes=100,
+        free_bytes=0,
+        available_bytes=0,
+        device_id="0:91",
+    )
+
+    filesystems = [btrfs_root, btrfs_subvolume, tmpfs, overlay, image]
 
     return StorageInventory(
         devices=[disk, virtual_disk],
@@ -96,7 +116,7 @@ class TestInventorySerialization(unittest.TestCase):
             [device["name"] for device in data["devices"]],
             ["sda", "zram0"],
         )
-        self.assertEqual(len(data["mounts"]), 3)
+        self.assertEqual(len(data["mounts"]), 5)
 
     def test_groups_btrfs_subvolumes_without_duplicate_capacity(self):
         data = inventory_to_dict(make_inventory(), include_all=True)
@@ -122,6 +142,23 @@ class TestInventorySerialization(unittest.TestCase):
         self.assertIsInstance(filesystem["total_bytes"], int)
         self.assertIsInstance(filesystem["used_percent"], float)
         self.assertEqual(data["schema_version"], 1)
+
+    def test_all_mode_exposes_stable_filesystem_categories(self):
+        data = inventory_to_dict(make_inventory(), include_all=True)
+
+        categories = {
+            item["filesystem_type"]: item["category"]
+            for item in data["mounts"]
+        }
+
+        self.assertEqual(categories["btrfs"], "persistent")
+        self.assertEqual(categories["tmpfs"], "temporary")
+        self.assertEqual(categories["overlay"], "virtual")
+        self.assertEqual(categories["fuse.dwarfs"], "application_image")
+
+    def test_relationships_do_not_change_existing_json_shape(self):
+        data = inventory_to_dict(make_inventory(), include_all=True)
+        self.assertNotIn("relationships", data)
 
 
 if __name__ == "__main__":
