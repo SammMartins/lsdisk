@@ -84,6 +84,7 @@ Capacity values depend on the information available from the running Linux syste
 | **Portability** | Avoid unnecessary dependencies on a specific Linux distribution. |
 | **Transparency** | Distinguish confirmed values from estimates or unavailable data. |
 | **Testability** | Validate calculations and behavior with automated tests. |
+| **Consistent presentation** | Use deliberate interface colors and clear visual hierarchy rather than relying on each terminal's default palette. |
 
 ## Technology
 
@@ -323,27 +324,38 @@ sudo dnf copr disable sammmartins/lsdisk
 
 Disabling the repository does not remove the installed package. Remove the package separately if necessary.
 
-## Development Status
 
-**lsdisk is in early development.** Features and interfaces may change as the project evolves.
-
-The current implementation covers block-device topology, read-only filesystem
-metadata probing, and capacity information for mounted filesystems.
+## 3. Development Status
 
 ### Roadmap
 
-- [ ] Improve identification of partitions whose filesystem information is unavailable.
-- [x] Add deterministic, read-only relationship discovery for LVM PV/VG/LV
-  layers and Linux MD RAID arrays where system metadata verifies them.
-- [ ] Validate LVM and Linux MD RAID discovery against real storage
-  configurations and across supported Linux distributions; current automated
-  coverage does not replace end-to-end testing on real arrays and volume groups.
-- [ ] Complete advanced storage-layer accounting for Btrfs multi-device
-  filesystems, LVM extents, RAID usable capacity and rebuild state, LUKS
-  layers, and additional Linux configurations.
-- [ ] Improve the UI and UX.
+#### Storage Discovery and Topology
 
-These items are planned improvements, not guarantees of the current implementation.
+- [ ] Improve identification of partitions whose filesystem information is unavailable.
+- [x] Add deterministic, read-only relationship discovery for LVM PV/VG/LV layers and Linux MD RAID arrays where system metadata verifies them.
+- [ ] Validate LVM and Linux MD RAID discovery against real storage configurations and across supported Linux distributions; automated coverage does not replace end-to-end testing on real arrays and volume groups.
+- [ ] Identify and display disk connection/interface information (for example, SATA, NVMe, USB, or other available bus information) in the default view, not only in expanded inventory mode.
+- [ ] Improve filesystem metadata discovery for supported filesystems, including cases where information is currently unavailable.
+
+#### Filesystem Capacity and Health Indicators
+
+- [ ] Add a compact Storage Summary section that lists up to three filesystems with critically high utilization (95% used or more). Show fewer than three entries when fewer filesystems meet the threshold, and show no list when none qualify.
+- [ ] Complete advanced storage-layer accounting for Btrfs multi-device filesystems, LVM extents, RAID usable capacity and rebuild state, LUKS layers, and additional Linux configurations.
+
+#### Command-Line Modes and Filtering
+
+- [ ] Add a classic filesystem overview mode (`lsdisk -c`) inspired by the information density of tools such as `df`, `lsblk`, and `fdisk`, while retaining lsdisk's own layout and visual style.
+- [ ] Add a search/filter option for a specific block device, partition, or filesystem type. Proposed examples: `lsdisk -s sda1`, `lsdisk --search sdb`, and `lsdisk --search btrfs`. Final syntax and matching behavior will be documented after implementation.
+- [ ] Include the installed lsdisk version in the title of each terminal view, for example `lsdisk  Linux Storage Explorer v0.1.2`.
+- [ ] In `--all` mode, check whether a newer release is available and display a clearly visible yellow update notice when an update is found. The check should fail gracefully when the network is unavailable and must not block local storage inspection.
+
+#### User Interface and User Experience
+
+- [ ] **Table mode redesign:** improve spacing, column sizing, alignment, readability, and hierarchy. This is a dedicated UI/UX subcategory, informed by the information density of utilities such as `duf` without copying its interface.
+- [ ] **Deterministic color palette:** use an application-defined palette with explicit colors and contrast choices instead of depending on terminal theme colors that may be indistinct or unsuitable.
+- [ ] Improve the overall consistency of the compact, expanded, table, and classic filesystem views while keeping output readable in different terminal environments.
+
+These items are planned improvements, not guarantees of the current implementation. Command examples under the roadmap are proposals until implemented and documented in a release.
 
 ## Project Documentation
 
