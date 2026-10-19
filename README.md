@@ -138,7 +138,7 @@ curl -s https://api.github.com/repos/SammMartins/lsdisk/releases/latest \
   | grep "browser_download_url.*deb" \
   | cut -d : -f 2,3 \
   | tr -d ' "' \
-  | xargs curl -LO && sudo apt install ./lsdisk_*.deb
+  | xargs curl -Lo /tmp/lsdisk_latest.deb && sudo apt install /tmp/lsdisk_latest.deb && rm -f /tmp/lsdisk_latest.deb
 ```
 
 Verify the installation:
