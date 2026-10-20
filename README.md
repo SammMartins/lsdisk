@@ -353,6 +353,28 @@ Disabling the repository does not remove the installed package. Remove the packa
 - [ ] Include the installed lsdisk version in the title of each terminal view, for example `lsdisk  Linux Storage Explorer v0.1.2`.
 - [ ] In `--all` mode, check whether a newer release is available and display a clearly visible yellow update notice when an update is found. The check should fail gracefully when the network is unavailable and must not block local storage inspection.
 
+#### Directory Usage Analysis
+
+- [ ] Add an optional "--directory-usage" mode to inspect directory sizes and identify which directories consume the most space within a selected filesystem.
+- [ ] Display directory paths, total size, and usage relative to the scanned filesystem, with results ordered by disk usage.
+- [ ] Support configurable scan depth and an option to select the starting directory.
+- [ ] Respect filesystem boundaries by default to avoid crossing into other mounted filesystems.
+- [ ] Handle permission errors, symbolic links, inaccessible directories, and files that change during scanning without aborting the entire operation.
+- [ ] Provide clear progress feedback and distinguish incomplete results from successful scans.
+- [ ] Keep directory scanning separate from the default storage inventory to preserve fast, predictable execution.
+
+##### Examples of Directory Usage Analysis:
+```bash
+# Analyze directories from the root filesystem
+lsdisk --directory-usage /
+
+# Analyze the user's home directory
+lsdisk --du /home/user
+
+# Limit the scan to two directory levels
+lsdisk --du / --depth 2
+```
+
 #### User Interface and User Experience
 
 - [ ] **Table mode redesign:** improve spacing, column sizing, alignment, readability, and hierarchy. This is a dedicated UI/UX subcategory, informed by the information density of utilities such as `duf` without copying its interface.
