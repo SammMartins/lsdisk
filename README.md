@@ -39,7 +39,7 @@
   - [Install Using Fedora COPR](#install-using-fedora-copr)
 - [Usage](#usage)
 - [Uninstallation](#uninstallation)
-- [Development Status](#development-status)
+- [Development Status](#3-development-status)
 - [Project Documentation](#project-documentation)
 - [Safety Scope](#safety-scope)
 - [License](#license)
@@ -48,52 +48,56 @@
 
 ## About lsdisk
 
-**lsdisk** is a Linux storage inspection tool designed to make information about HDDs, SSDs, partitions, and filesystems easier to understand.
+**lsdisk — Linux Storage Explorer** is a cross-distro Linux CLI tool that makes storage information easier to inspect and understand.
 
-It brings storage topology and filesystem capacity information together in a structured terminal interface.
+It brings disk devices, partitions, storage topology, and filesystem usage into a clear, structured terminal interface, helping users understand their storage at a glance.
 
-lsdisk is read-only: it inspects storage and does not format, partition, mount, or modify filesystems.
+- **Cross-distro:** Designed for use across different Linux distributions.
+- **Read-only:** Inspects storage without formatting disks, modifying partitions, mounting filesystems, or changing storage configurations.
+- **Multiple output modes:** Supports compact, expanded, table, and JSON output for different workflows.
+- **Built for clarity:** Presents storage information in a readable terminal interface.
+
+**Understand Your Disks at a Glance.**
 
 ![lsdisk Demo](https://raw.githubusercontent.com/SammMartins/lsdisk/main/img/lsdisk_0_1_1.gif)
 
-<p><sub><em>Live demonstration of lsdisk v0.1.1 inspecting Linux storage devices in the terminal.</em></sub></p>
+<p align="center"><sub>lsdisk v0.1.1 — Live terminal demonstration of Linux storage inspection.</sub></p>
 
 ## Features
 
-- **Physical storage inventory** — show detected disks and their child partitions in a hierarchical view.
-- **Device details** — display device names, capacity, model, physical/virtual classification, and HDD or SSD/Flash indicators when the system provides enough information.
-- **Filesystem metadata** — identify filesystem signatures on unmounted block devices and collect labels and UUIDs when available, without mounting them.
-- **Filesystem capacity** — report total, used, free, and user-available capacity for accessible mounted filesystems.
-- **Mountpoint visibility** — associate filesystem information with mountpoints where the relationship can be established.
-- **Filesystem grouping** — group related filesystem records to avoid repeating capacity for multiple mountpoints, including supported Btrfs subvolume cases.
-- **Filesystem classification** — distinguish persistent storage, network,
-  application-image, temporary, virtual, and unknown filesystems without
-  hiding their mountpoints.
-- **Utilization bars** — display a compact visual usage bar and percentage in the terminal. Green indicates below 70% utilization, yellow indicates 70% to below 90%, and red indicates 90% or higher.
-- **Multiple output modes** — provide a compact default view, expanded output, table output, and JSON output.
-- **Graceful handling of missing data** — distinguish unavailable information from a confirmed zero value.
+- **Physical storage inventory** — display detected disks and their child partitions in a hierarchical view.
+- **Device information** — show device names, capacity, model, physical or virtual classification, and HDD or SSD/Flash indicators when sufficient system information is available.
+- **Filesystem metadata discovery** — identify filesystem signatures on unmounted block devices and retrieve labels and UUIDs when available, without mounting them.
+- **Filesystem capacity reporting** — display total, used, free, and user-available capacity for accessible mounted filesystems.
+- **Mountpoint association** — link filesystem information to mountpoints whenever the relationship can be reliably established.
+- **Filesystem grouping** — group related filesystem records to avoid duplicating capacity figures across multiple mountpoints, including supported Btrfs subvolume configurations.
+- **Filesystem classification** — categorize filesystems as persistent, network, application-image, temporary, virtual, or unknown while preserving mountpoint visibility.
+- **Visual utilization indicators** — display compact usage bars and percentages with color-coded thresholds: green below 70%, yellow from 70% to below 90%, and red at 90% or higher.
+- **Multiple output modes** — provide compact default, expanded, table, and JSON output for different inspection and integration needs.
+- **Graceful handling of incomplete data** — distinguish unavailable information from confirmed zero values instead of presenting missing data as valid measurements.
 
-Capacity values depend on the information available from the running Linux system. Physical disk capacity and mounted filesystem capacity describe different layers and should not be treated as interchangeable.
+Capacity figures depend on the information exposed by the running Linux system. Physical disk capacity and mounted filesystem capacity represent different storage layers and must be interpreted separately.
 
 ## Design Principles
 
 | Principle | What it means |
 |---|---|
-| **Read-only inspection** | Do not modify disks, partitions, or filesystems. |
-| **Modular architecture** | Keep data collection, analysis, serialization, and presentation separated. |
-| **Portability** | Avoid unnecessary dependencies on a specific Linux distribution. |
-| **Transparency** | Distinguish confirmed values from estimates or unavailable data. |
-| **Testability** | Validate calculations and behavior with automated tests. |
-| **Consistent presentation** | Use deliberate interface colors and clear visual hierarchy rather than relying on each terminal's default palette. |
+| **Read-only inspection** | Inspect storage without modifying disks, partitions, or filesystems. |
+| **Modular architecture** | Separate data collection, analysis, serialization, and presentation into distinct components. |
+| **Cross-distribution portability** | Minimize dependencies on distribution-specific tools and conventions. |
+| **Data transparency** | Distinguish confirmed values, unavailable information, and estimates where applicable. |
+| **Testability** | Validate calculations, data handling, and application behavior through automated tests. |
+| **Consistent presentation** | Use a deliberate color palette, clear visual hierarchy, and predictable formatting across output modes. |
 
 ## Technology
 
-- **Python** — application logic.
-- **Rich** — terminal presentation and colored utilization bars.
-- **Python standard library** — core APIs and supporting functionality.
-- **Linux interfaces** — including `/sys` and `/proc`, where appropriate.
+- **Python** — core application logic and storage data processing.
+- **Rich** — terminal rendering, structured layouts, and colored utilization indicators.
+- **Python standard library** — filesystem access, system integration, and supporting functionality.
+- **Linux system interfaces** — `/sys` and `/proc` for system and device information where appropriate.
 - **`os.statvfs()`** — mounted filesystem capacity statistics.
-- **`unittest`** — automated testing.
+- **`unittest`** — automated testing of application behavior and calculations.
+
 
 ## Requirements
 
