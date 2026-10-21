@@ -331,31 +331,45 @@ Disabling the repository does not remove the installed package. Remove the packa
 
 ## 3. Development Status
 
-### Roadmap
+## Roadmap
 
-#### Storage Discovery and Topology
+### Storage Discovery and Topology
 
-- [ ] Improve identification of partitions whose filesystem information is unavailable.
+- [ ] Improve identification of partitions whose filesystem information is unavailable, including partitions without filesystems and devices with incomplete metadata.
 - [x] Add deterministic, read-only relationship discovery for LVM PV/VG/LV layers and Linux MD RAID arrays where system metadata verifies them.
 - [ ] Validate LVM and Linux MD RAID discovery against real storage configurations and across supported Linux distributions; automated coverage does not replace end-to-end testing on real arrays and volume groups.
 - [ ] Identify and display disk connection/interface information (for example, SATA, NVMe, USB, or other available bus information) in the default view, not only in expanded inventory mode.
-- [ ] Improve filesystem metadata discovery for supported filesystems, including cases where information is currently unavailable.
+- [ ] Improve filesystem metadata discovery for supported filesystems, including unmounted filesystems and cases where information is currently unavailable.
 
-#### Filesystem Capacity and Health Indicators
+### Comprehensive Storage Inventory and Architecture
+
+- [ ] Expand `--all` into a comprehensive, read-only storage inventory designed for diagnostics, storage analysis, and partition planning.
+- [ ] Introduce modular data collectors for device discovery, partition metadata, filesystem information, mount configuration, and storage-layer relationships.
+- [ ] Normalize collected information into a consistent internal data model, separating data collection, analysis, serialization, and presentation.
+- [ ] Discover partition-table formats, logical and physical sector sizes, partition start and end offsets, partition names, type identifiers (`PARTTYPE`), and available partition flags.
+- [ ] Identify unallocated disk regions, including their start offsets, end offsets, and sizes, without confusing them with free space inside filesystems.
+- [ ] Collect filesystem UUIDs, labels, mountpoints, capacity statistics, and persistent mount configuration from `/etc/fstab` where available.
+- [ ] Correlate devices, partitions, filesystems, mountpoints, and storage layers only when their relationships can be reliably established.
+- [ ] Prefer standard Linux interfaces and distribution-independent mechanisms, using external utilities only when necessary and handling their absence gracefully.
+- [ ] Preserve a consistent data model across compact, expanded, table, classic, and JSON output modes while allowing each presentation to expose an appropriate level of detail.
+- [ ] Clearly distinguish directly detected facts, derived information, inferred relationships, and unavailable data.
+- [ ] Preserve read-only behavior throughout discovery and reporting; never modify partition tables, filesystems, mount configurations, or storage metadata.
+
+### Filesystem Capacity and Health Indicators
 
 - [ ] Add a compact Storage Summary section that lists up to three filesystems with critically high utilization (95% used or more). Show fewer than three entries when fewer filesystems meet the threshold, and show no list when none qualify.
 - [ ] Complete advanced storage-layer accounting for Btrfs multi-device filesystems, LVM extents, RAID usable capacity and rebuild state, LUKS layers, and additional Linux configurations.
 
-#### Command-Line Modes and Filtering
+### Command-Line Modes and Filtering
 
 - [ ] Add a classic filesystem overview mode (`lsdisk -c`) inspired by the information density of tools such as `df`, `lsblk`, and `fdisk`, while retaining lsdisk's own layout and visual style.
-- [ ] Add a search/filter option for a specific block device, partition, or filesystem type. Proposed examples: `lsdisk -s sda1`, `lsdisk --search sdb`, and `lsdisk --search btrfs`. Final syntax and matching behavior will be documented after implementation.
+- [ ] Add a search/filter option for a specific block device, partition, filesystem type, or mountpoint. Proposed examples: `lsdisk -s sda1`, `lsdisk --search sdb`, and `lsdisk --search btrfs`. Final syntax and matching behavior will be documented after implementation.
 - [ ] Include the installed lsdisk version in the title of each terminal view, for example `lsdisk  Linux Storage Explorer v0.1.2`.
 - [ ] In `--all` mode, check whether a newer release is available and display a clearly visible yellow update notice when an update is found. The check should fail gracefully when the network is unavailable and must not block local storage inspection.
 
-#### Directory Usage Analysis
+### Directory Usage Analysis
 
-- [ ] Add an optional "--directory-usage" mode to inspect directory sizes and identify which directories consume the most space within a selected filesystem.
+- [ ] Add an optional directory usage analysis mode (`--du`) to inspect directory sizes and identify which directories consume the most space within a selected filesystem.
 - [ ] Display directory paths, total size, and usage relative to the scanned filesystem, with results ordered by disk usage.
 - [ ] Support configurable scan depth and an option to select the starting directory.
 - [ ] Respect filesystem boundaries by default to avoid crossing into other mounted filesystems.
@@ -363,10 +377,11 @@ Disabling the repository does not remove the installed package. Remove the packa
 - [ ] Provide clear progress feedback and distinguish incomplete results from successful scans.
 - [ ] Keep directory scanning separate from the default storage inventory to preserve fast, predictable execution.
 
-##### Examples of Directory Usage Analysis:
+#### Examples of Directory Usage Analysis
+
 ```bash
 # Analyze directories from the root filesystem
-lsdisk --directory-usage /
+lsdisk --du /
 
 # Analyze the user's home directory
 lsdisk --du /home/user
@@ -375,13 +390,13 @@ lsdisk --du /home/user
 lsdisk --du / --depth 2
 ```
 
-#### User Interface and User Experience
+### User Interface and User Experience
 
 - [ ] **Table mode redesign:** improve spacing, column sizing, alignment, readability, and hierarchy. This is a dedicated UI/UX subcategory, informed by the information density of utilities such as `duf` without copying its interface.
 - [ ] **Deterministic color palette:** use an application-defined palette with explicit colors and contrast choices instead of depending on terminal theme colors that may be indistinct or unsuitable.
 - [ ] Improve the overall consistency of the compact, expanded, table, and classic filesystem views while keeping output readable in different terminal environments.
 
-These items are planned improvements, not guarantees of the current implementation. Command examples under the roadmap are proposals until implemented and documented in a release.
+These items describe planned improvements, not guarantees of the current implementation. Command examples are proposals until implemented and documented in a release.
 
 ## Project Documentation
 
