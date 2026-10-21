@@ -39,7 +39,7 @@
   - [Install Using Fedora COPR](#install-using-fedora-copr)
 - [Usage](#usage)
 - [Uninstallation](#uninstallation)
-- [Development Status](#3-development-status)
+- [Development Status](#roadmap)
 - [Project Documentation](#project-documentation)
 - [Safety Scope](#safety-scope)
 - [License](#license)
@@ -327,9 +327,6 @@ sudo dnf copr disable sammmartins/lsdisk
 ```
 
 Disabling the repository does not remove the installed package. Remove the package separately if necessary.
-
-
-## 3. Development Status
 
 ## Roadmap
 
