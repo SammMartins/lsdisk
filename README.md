@@ -39,7 +39,7 @@
   - [Install Using Fedora COPR](#install-using-fedora-copr)
 - [Usage](#usage)
 - [Uninstallation](#uninstallation)
-- [Development Status](#roadmap)
+- [Roadmap](#roadmap)
 - [Project Documentation](#project-documentation)
 - [Safety Scope](#safety-scope)
 - [License](#license)
@@ -340,17 +340,17 @@ Disabling the repository does not remove the installed package. Remove the packa
 
 ### Comprehensive Storage Inventory and Architecture
 
-- [ ] Expand `--all` into a comprehensive, read-only storage inventory designed for diagnostics, storage analysis, and partition planning.
-- [ ] Introduce modular data collectors for device discovery, partition metadata, filesystem information, mount configuration, and storage-layer relationships.
-- [ ] Normalize collected information into a consistent internal data model, separating data collection, analysis, serialization, and presentation.
+The architectural foundation is implemented: lsdisk has modular collectors, normalized models, inventory orchestration, analyzers, serialization, and separate terminal presentation. The remaining work is to broaden the inventory and validate more storage configurations.
+
+- [x] Separate data collection, normalized models, analysis, serialization, and terminal presentation into distinct components.
+- [x] Correlate devices, partitions, filesystems, mountpoints, and storage layers when relationships can be verified, while preserving unknown relationships.
+- [x] Prefer standard Linux interfaces and optional external utilities, handling missing tools and incomplete data gracefully.
+- [x] Preserve read-only behavior and distinguish unavailable data from confirmed zero values.
+- [ ] Expand `--all` into a more comprehensive, read-only storage inventory for diagnostics, storage analysis, and partition planning.
 - [ ] Discover partition-table formats, logical and physical sector sizes, partition start and end offsets, partition names, type identifiers (`PARTTYPE`), and available partition flags.
 - [ ] Identify unallocated disk regions, including their start offsets, end offsets, and sizes, without confusing them with free space inside filesystems.
-- [ ] Collect filesystem UUIDs, labels, mountpoints, capacity statistics, and persistent mount configuration from `/etc/fstab` where available.
-- [ ] Correlate devices, partitions, filesystems, mountpoints, and storage layers only when their relationships can be reliably established.
-- [ ] Prefer standard Linux interfaces and distribution-independent mechanisms, using external utilities only when necessary and handling their absence gracefully.
+- [ ] Extend filesystem and mount inventory to include persistent mount configuration from `/etc/fstab` where available, alongside existing UUID, label, mountpoint, and capacity information.
 - [ ] Preserve a consistent data model across compact, expanded, table, classic, and JSON output modes while allowing each presentation to expose an appropriate level of detail.
-- [ ] Clearly distinguish directly detected facts, derived information, inferred relationships, and unavailable data.
-- [ ] Preserve read-only behavior throughout discovery and reporting; never modify partition tables, filesystems, mount configurations, or storage metadata.
 
 ### Filesystem Capacity and Health Indicators
 

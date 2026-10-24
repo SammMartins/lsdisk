@@ -4,7 +4,7 @@ All notable changes to lsdisk are documented in this file.
 
 This project follows [Semantic Versioning](https://semver.org/).
 
-## [0.1.2] - Unreleased
+## [0.1.2] - 2026-10-18
 
 ### Added
 
@@ -31,8 +31,8 @@ This project follows [Semantic Versioning](https://semver.org/).
 - Added deterministic regression coverage for filesystem probes, canonical
   identities, storage relationships, LVM and MD RAID metadata handling, and
   capacity ownership.
-- Real-system LVM and RAID integration validation remains outside this
-  release preparation.
+- Real-system LVM and RAID integration validation remains a known limitation
+  of this release and should be completed in supported test environments.
 
 ## [0.1.1] - 2026-10-12
 
@@ -58,4 +58,5 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Release history
 
-No published release is documented in this changelog yet.
+- [0.1.2] — 2026-10-18 ([GitHub release](https://github.com/SammMartins/lsdisk/releases/tag/v0.1.2))
+- [0.1.1] — 2026-10-12 ([GitHub release](https://github.com/SammMartins/lsdisk/releases/tag/v0.1.1))
