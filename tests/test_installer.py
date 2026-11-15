@@ -5,6 +5,7 @@ import io
 import json
 import os
 import subprocess
+import sys
 import tarfile
 import tempfile
 import unittest
@@ -25,7 +26,7 @@ class TestInstallerReplacement(unittest.TestCase):
         cls.artifact_directory.mkdir()
         subprocess.run(
             [
-                str(PROJECT_ROOT / ".venv" / "bin" / "python"),
+                sys.executable,
                 "-m",
                 "build",
                 "--sdist",
