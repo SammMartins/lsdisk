@@ -11,6 +11,7 @@ from lsdisk import (
     create_console,
     render_all,
     render_compact,
+    render_classic,
     render_simple,
 )
 
@@ -63,6 +64,12 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Use tabular terminal output instead of the compact layout.",
     )
+    output_modes.add_argument(
+        "-c",
+        "--classic",
+        action="store_true",
+        help="Show the classic filesystem capacity overview.",
+    )
 
     parser.add_argument(
         "--color",
@@ -106,7 +113,9 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     console = create_console(args.color)
 
-    if args.table_mode:
+    if args.classic:
+        render_classic(inventory, console)
+    elif args.table_mode:
         if args.all:
             render_all(inventory, console)
         else:

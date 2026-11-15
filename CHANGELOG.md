@@ -4,6 +4,52 @@ All notable changes to lsdisk are documented in this file.
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.1.3] - 2026-11-11
+
+### Added
+
+- Added read-only partition-table geometry, sector-size, partition-name,
+  type, flag, and conservative unallocated-region inventory.
+- Added persistent `/etc/fstab` entries as separate inventory records.
+- Added the `-c`/`--classic` filesystem overview mode.
+- Added a shared application palette and width-conscious table columns.
+
+### Changed
+
+- Clarified cross-distribution requirements, optional system utilities,
+  privilege expectations, and the distinction between active mounts and
+  persistent mount configuration.
+- Pinned the per-user installer to an exact release version and added
+  SHA-256 verification against PyPI metadata.
+- Excluded development-only files from production source distributions.
+
+### Fixed
+
+- Reject incomplete or ambiguous MD RAID member relationships, including
+  partially resolved sysfs topology and malformed `mdadm` output.
+- Show partition geometry and persistent `/etc/fstab` configuration in
+  expanded compact output without conflating configured and active mounts.
+- Validate release tags and built artifact metadata before PyPI publication.
+- Isolate malformed or out-of-range sysfs device sizes from valid devices.
+- Corrected partition geometry and sector-boundary handling, including
+  preservation of sector zero and rejection of invalid, overlapping,
+  misaligned, or out-of-capacity geometry before unallocated regions are
+  reported.
+- Prevented duplicate filesystem probes by reusing complete `lsblk`
+  metadata and probing each remaining eligible device once.
+- Stabilized simple and expanded JSON serialization, including numeric
+  capacity values, zero-valued sector boundaries, grouped filesystem
+  capacity, and deterministic deduplicated relationship references.
+- Improved adaptive terminal column allocation so optional values are
+  abbreviated only when needed and width warnings are shown only when the
+  layout is reduced.
+
+### Documentation
+
+- Expanded documentation for the simple and expanded JSON contracts,
+  verified storage relationships, filesystem probe states, and adaptive
+  terminal layouts.
+
 ## [0.1.2] - 2026-10-18
 
 ### Added

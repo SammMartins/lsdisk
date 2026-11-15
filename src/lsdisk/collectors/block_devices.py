@@ -7,6 +7,7 @@ from lsdisk.models import BlockDevice
 
 SYSFS_BLOCK_PATH = Path("/sys/class/block")
 SECTOR_SIZE_BYTES = 512
+MAX_SYSFS_SIZE_SECTORS = (1 << 64) - 1
 
 
 def _read_text(path: Path) -> str | None:
@@ -54,9 +55,13 @@ def _build_device(entry: Path) -> BlockDevice | None:
         return None
 
     try:
-        size_bytes = int(raw_size) * SECTOR_SIZE_BYTES
-    except ValueError:
+        size_sectors = int(raw_size)
+    except (TypeError, ValueError, OverflowError):
         return None
+
+    if not 0 <= size_sectors <= MAX_SYSFS_SIZE_SECTORS:
+        return None
+    size_bytes = size_sectors * SECTOR_SIZE_BYTES
 
     is_partition = (entry / "partition").exists()
     device_type = "part" if is_partition else "disk"
@@ -105,8 +110,16 @@ def collect_block_devices(
 
     discovered: dict[str, BlockDevice] = {}
 
-    for entry in sorted(sysfs_path.iterdir(), key=lambda item: item.name):
-        device = _build_device(entry)
+    try:
+        entries = sorted(sysfs_path.iterdir(), key=lambda item: item.name)
+    except OSError:
+        return []
+
+    for entry in entries:
+        try:
+            device = _build_device(entry)
+        except (OSError, RuntimeError, ValueError, OverflowError):
+            continue
         if device is not None:
             discovered[device.name] = device
 

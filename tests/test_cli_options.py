@@ -23,6 +23,13 @@ class TestTableModeOptions(unittest.TestCase):
 
         self.assertEqual(context.exception.code, 2)
 
+    def test_accepts_classic_filesystem_mode(self):
+        self.assertTrue(build_parser().parse_args(["-c"]).classic)
+        with redirect_stderr(StringIO()):
+            with self.assertRaises(SystemExit) as context:
+                build_parser().parse_args(["-c", "-T"])
+        self.assertEqual(context.exception.code, 2)
+
 
 if __name__ == "__main__":
     unittest.main()

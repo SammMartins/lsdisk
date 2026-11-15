@@ -104,6 +104,45 @@ class TestBlockDeviceCollector(unittest.TestCase):
         self.assertEqual(device.model, "Example HDD")
         self.assertTrue(device.rotational)
 
+    def test_skips_negative_non_numeric_missing_and_empty_sizes(self):
+        for name, value in (
+            ("negative", "-1"),
+            ("non-numeric", "not-a-number"),
+            ("empty", ""),
+        ):
+            device_dir = self.devices / "block" / name
+            device_dir.mkdir(parents=True)
+            (device_dir / "size").write_text(value)
+            (self.sysfs / name).symlink_to(device_dir)
+
+        valid = self.create_device("valid", 1000)
+        devices = collect_block_devices(self.sysfs)
+
+        self.assertEqual([device.name for device in devices], ["valid"])
+        self.assertTrue(valid.exists())
+
+    def test_skips_device_with_missing_size_and_keeps_valid_neighbor(self):
+        missing = self.devices / "block" / "missing"
+        missing.mkdir(parents=True)
+        (self.sysfs / "missing").symlink_to(missing)
+        self.create_device("valid", 1000)
+
+        devices = collect_block_devices(self.sysfs)
+
+        self.assertEqual([device.name for device in devices], ["valid"])
+        self.assertFalse(any(device.name == "missing" for device in devices))
+
+    def test_skips_extremely_large_sizes_and_keeps_neighbors(self):
+        oversized = self.devices / "block" / "oversized"
+        oversized.mkdir(parents=True)
+        (oversized / "size").write_text(str(1 << 80))
+        (self.sysfs / "oversized").symlink_to(oversized)
+        self.create_device("valid", 1000)
+
+        devices = collect_block_devices(self.sysfs)
+
+        self.assertEqual([device.name for device in devices], ["valid"])
+
 
 if __name__ == "__main__":
     unittest.main()

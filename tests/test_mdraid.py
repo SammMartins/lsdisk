@@ -47,7 +47,7 @@ class TestMdraidCollector(unittest.TestCase):
             {"/dev/sda1", "/dev/sdb1"},
         )
 
-    def test_discovers_multiple_arrays_and_deduplicates_members(self):
+    def test_rejects_duplicate_members_without_affecting_other_arrays(self):
         second = self.sysfs / "md1" / "slaves"
         second.mkdir(parents=True)
         (second / "sda1").symlink_to("/dev/null")
@@ -61,9 +61,9 @@ class TestMdraidCollector(unittest.TestCase):
         relationships = collect_mdraid_relationships(
             self.devices, sysfs_path=self.sysfs, mdstat_path=self.mdstat
         )
-        self.assertEqual(len(relationships), 2)
+        self.assertEqual(len(relationships), 1)
         self.assertEqual(len(relationships[0].lower), 2)
-        self.assertEqual(len(relationships[1].lower), 1)
+        self.assertEqual(relationships[0].upper.identifier, "/dev/md0")
 
     def test_missing_interfaces_return_no_relationships(self):
         self.assertEqual(
@@ -90,11 +90,7 @@ class TestMdraidCollector(unittest.TestCase):
         relationships = collect_mdraid_relationships(
             self.devices, sysfs_path=self.sysfs, mdstat_path=self.mdstat
         )
-        self.assertEqual(len(relationships), 1)
-        self.assertEqual(
-            [member.identifier for member in relationships[0].lower],
-            ["/dev/sda1"],
-        )
+        self.assertEqual(relationships, [])
 
     @patch("lsdisk.collectors.mdraid.subprocess.run")
     def test_optional_mdadm_fallback_handles_missing_permission_and_timeout(self, run):
@@ -137,6 +133,93 @@ class TestMdraidCollector(unittest.TestCase):
         self.assertEqual(len(relationships), 1)
         self.assertEqual(len(relationships[0].lower), 2)
 
+    @patch("lsdisk.collectors.mdraid.subprocess.run")
+    def test_mdadm_fallback_completes_partially_resolved_sysfs_members(self, run):
+        (self.sysfs / "md0" / "slaves" / "sdb1").unlink()
+        (self.sysfs / "md0" / "slaves" / "missing").symlink_to("/dev/null")
+        run.return_value = subprocess.CompletedProcess(
+            args=["mdadm"], returncode=0,
+            stdout="MD_DEVICE_0_DEV=/dev/sda1\nMD_DEVICE_1_DEV=/dev/sdb1\n",
+            stderr="",
+        )
+        relationships = collect_mdraid_relationships(
+            self.devices, sysfs_path=self.sysfs, mdstat_path=self.mdstat
+        )
+        self.assertEqual(len(relationships), 1)
+        self.assertEqual(len(relationships[0].lower), 2)
+
+    @patch("lsdisk.collectors.mdraid.subprocess.run")
+    def test_partial_members_without_successful_fallback_are_rejected(self, run):
+        (self.sysfs / "md0" / "slaves" / "sdb1").unlink()
+        (self.sysfs / "md0" / "slaves" / "missing").symlink_to("/dev/null")
+        run.return_value = subprocess.CompletedProcess(
+            args=["mdadm"], returncode=0,
+            stdout="MD_DEVICE_0_DEV=/dev/sda1\nMD_DEVICE_1_DEV=/dev/missing\n",
+            stderr="",
+        )
+        self.assertEqual(
+            collect_mdraid_relationships(
+                self.devices, sysfs_path=self.sysfs, mdstat_path=self.mdstat
+            ),
+            [],
+        )
+
+    @patch("lsdisk.collectors.mdraid.subprocess.run")
+    def test_invalid_array_does_not_hide_valid_array(self, run):
+        invalid_slaves = self.sysfs / "md0" / "slaves"
+        (invalid_slaves / "sdb1").unlink()
+        (invalid_slaves / "missing").symlink_to("/dev/null")
+        valid_slaves = self.sysfs / "md1" / "slaves"
+        valid_slaves.mkdir(parents=True)
+        (valid_slaves / "sda1").symlink_to("/dev/null")
+        self.mdstat.write_text(
+            "md0 : active raid1 sda1[0] missing[1]\n"
+            "md1 : active raid1 sda1[0]\n",
+            encoding="utf-8",
+        )
+        run.return_value = subprocess.CompletedProcess(
+            args=["mdadm"], returncode=1, stdout="", stderr="unavailable"
+        )
+
+        relationships = collect_mdraid_relationships(
+            self.devices, sysfs_path=self.sysfs, mdstat_path=self.mdstat
+        )
+
+        self.assertEqual(len(relationships), 1)
+        self.assertEqual(relationships[0].upper.identifier, "/dev/md1")
+
+    @patch("lsdisk.collectors.mdraid.subprocess.run")
+    def test_malformed_mdadm_output_is_rejected(self, run):
+        (self.sysfs / "md0" / "slaves" / "sda1").unlink()
+        (self.sysfs / "md0" / "slaves" / "sdb1").unlink()
+        run.return_value = subprocess.CompletedProcess(
+            args=["mdadm"], returncode=0,
+            stdout="MD_DEVICE_0_DEV=/dev/sda1\nMD_DEVICE_BAD\n",
+            stderr="",
+        )
+        self.assertEqual(
+            collect_mdraid_relationships(
+                self.devices, sysfs_path=self.sysfs, mdstat_path=self.mdstat
+            ),
+            [],
+        )
+
+    @patch("lsdisk.collectors.mdraid.subprocess.run")
+    def test_duplicate_mdadm_members_are_rejected(self, run):
+        (self.sysfs / "md0" / "slaves" / "sda1").unlink()
+        (self.sysfs / "md0" / "slaves" / "sdb1").unlink()
+        run.return_value = subprocess.CompletedProcess(
+            args=["mdadm"], returncode=0,
+            stdout="MD_DEVICE_0_DEV=/dev/sda1\nMD_DEVICE_1_DEV=/dev/sda1\n",
+            stderr="",
+        )
+        self.assertEqual(
+            collect_mdraid_relationships(
+                self.devices, sysfs_path=self.sysfs, mdstat_path=self.mdstat
+            ),
+            [],
+        )
+
     def test_malformed_mdstat_and_duplicate_sysfs_entries_are_safe(self):
         self.mdstat.write_text("not mdstat\n", encoding="utf-8")
         (self.sysfs / "md0" / "slaves" / "sda1-copy").symlink_to("/dev/null")
@@ -144,8 +227,7 @@ class TestMdraidCollector(unittest.TestCase):
         relationships = collect_mdraid_relationships(
             self.devices, sysfs_path=self.sysfs, mdstat_path=self.mdstat
         )
-        self.assertEqual(len(relationships), 1)
-        self.assertEqual(len(relationships[0].lower), 2)
+        self.assertEqual(relationships, [])
 
     def test_skips_md_array_cycles(self):
         md1_slaves = self.sysfs / "md1" / "slaves"

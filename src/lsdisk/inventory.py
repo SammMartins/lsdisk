@@ -10,7 +10,7 @@ from lsdisk.analyzers.filesystems import (
 from lsdisk.device_paths import canonical_device_path
 from lsdisk.collectors.filesystem_metadata import (
     collect_lsblk_metadata,
-    probe_filesystem,
+    probe_filesystem_outcome,
 )
 from lsdisk.collectors.block_devices import collect_block_devices
 from lsdisk.collectors.filesystems import collect_filesystems
@@ -21,9 +21,17 @@ from lsdisk.collectors.storage_relationships import (
 )
 from lsdisk.models import (
     BlockDevice,
+    FstabEntry,
     FilesystemUsage,
+    UnallocatedRegion,
     StorageRelationship,
 )
+from lsdisk.collectors.fstab import collect_fstab_entries
+from lsdisk.collectors.partition_metadata import (
+    apply_partition_metadata,
+    collect_partition_metadata,
+)
+from lsdisk.analyzers.partitions import find_unallocated_regions
 
 
 @dataclass
@@ -34,6 +42,8 @@ class StorageInventory:
     filesystems: list[FilesystemUsage]
     filesystem_groups: list[FilesystemGroup]
     relationships: list[StorageRelationship] = field(default_factory=list)
+    fstab_entries: list[FstabEntry] = field(default_factory=list)
+    unallocated_regions: list[UnallocatedRegion] = field(default_factory=list)
 
 
 def walk_devices(
@@ -49,6 +59,7 @@ def collect_storage_inventory() -> StorageInventory:
     """Collect devices and filesystems and associate their mountpoints."""
     devices = collect_block_devices()
     filesystems = collect_filesystems()
+    apply_partition_metadata(devices, collect_partition_metadata())
 
     devices_by_path: dict[str, BlockDevice] = {}
 
@@ -90,7 +101,9 @@ def collect_storage_inventory() -> StorageInventory:
         ):
             continue
 
-        probed = probe_filesystem(device.path)
+        outcome = probe_filesystem_outcome(device.path)
+        device.filesystem_probe_state = outcome.state
+        probed = outcome.metadata
         if probed is None:
             continue
 
@@ -129,4 +142,6 @@ def collect_storage_inventory() -> StorageInventory:
             + collect_lvm_relationships(devices)
             + collect_mdraid_relationships(devices)
         ),
+        fstab_entries=collect_fstab_entries(),
+        unallocated_regions=find_unallocated_regions(devices),
     )

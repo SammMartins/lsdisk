@@ -4,6 +4,11 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 
 
+# lsblk reports partition start and end offsets in 512-byte sectors,
+# regardless of the device's logical sector size.
+PARTITION_SECTOR_SIZE_BYTES = 512
+
+
 class ProbeState(StrEnum):
     """Outcome of a read-only filesystem signature probe."""
 
@@ -11,6 +16,55 @@ class ProbeState(StrEnum):
     NO_SIGNATURE = "no_signature"
     UNAVAILABLE = "unavailable"
     ERROR = "error"
+
+
+@dataclass(frozen=True)
+class PartitionMetadata:
+    """Partition-table and geometry facts reported by Linux interfaces.
+
+    ``start_sector`` and ``end_sector`` are inclusive 512-byte sector
+    numbers, matching the unit used by lsblk's START column. Both are
+    independent of ``logical_sector_size``, which is measured in bytes.
+    """
+
+    partition_table: str | None = None
+    logical_sector_size: int | None = None
+    physical_sector_size: int | None = None
+    start_sector: int | None = None
+    end_sector: int | None = None
+    partition_name: str | None = None
+    partition_type: str | None = None
+    flags: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class UnallocatedRegion:
+    """A verified gap in a disk partition table, measured in bytes."""
+
+    disk_path: str
+    start_bytes: int
+    end_bytes: int
+    size_bytes: int
+
+    def __post_init__(self) -> None:
+        if min(self.start_bytes, self.end_bytes, self.size_bytes) < 0:
+            raise ValueError("Unallocated regions cannot have negative offsets.")
+        if self.end_bytes < self.start_bytes:
+            raise ValueError("Unallocated region end must not precede its start.")
+        if self.size_bytes != self.end_bytes - self.start_bytes + 1:
+            raise ValueError("Unallocated region size does not match its bounds.")
+
+
+@dataclass(frozen=True)
+class FstabEntry:
+    """One persistent mount configuration entry, without mounting it."""
+
+    source: str
+    mountpoint: str
+    filesystem_type: str
+    options: tuple[str, ...] = ()
+    dump: str | None = None
+    pass_number: str | None = None
 
 
 class StorageDeviceKind(StrEnum):
@@ -62,6 +116,11 @@ class StorageDeviceReference:
             raise ValueError("Storage device identifiers cannot be empty.")
 
 
+def storage_reference_identity(reference: StorageDeviceReference) -> str:
+    """Return the strongest available identity for a storage reference."""
+    return reference.canonical_path or reference.identifier
+
+
 @dataclass(frozen=True)
 class StorageRelationship:
     """Describe one upper storage layer backed by one or more lower layers."""
@@ -96,6 +155,8 @@ class BlockDevice:
     filesystem_type: str | None = None
     filesystem_label: str | None = None
     filesystem_uuid: str | None = None
+    filesystem_probe_state: ProbeState | None = None
+    partition_metadata: PartitionMetadata | None = None
     mountpoints: list[str] = field(default_factory=list)
     children: list["BlockDevice"] = field(default_factory=list)
 

@@ -42,8 +42,8 @@ def _active_arrays(mdstat_path: Path) -> set[str] | None:
     }
 
 
-def _mdadm_members(array_path: str) -> list[str]:
-    """Read optional mdadm export metadata without changing array state."""
+def _mdadm_members(array_path: str) -> list[str] | None:
+    """Read validated mdadm member metadata without changing array state."""
     try:
         result = subprocess.run(
             ["mdadm", "--detail", "--export", array_path],
@@ -53,16 +53,23 @@ def _mdadm_members(array_path: str) -> list[str]:
             timeout=MDADM_TIMEOUT_SECONDS,
         )
     except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
-        return []
+        return None
 
     if result.returncode != 0:
-        return []
+        return None
 
-    return [
-        match.group(1)
-        for line in result.stdout.splitlines()
-        if (match := _MDADM_MEMBER.match(line))
-    ]
+    members: list[str] = []
+    for line in result.stdout.splitlines():
+        if not line.startswith("MD_DEVICE_"):
+            continue
+        if "_DEV=" not in line and "=" in line:
+            continue
+        match = _MDADM_MEMBER.fullmatch(line)
+        if match is None:
+            return None
+        members.append(match.group(1))
+
+    return members
 
 
 def _reference(device: BlockDevice) -> StorageDeviceReference:
@@ -113,6 +120,34 @@ def _would_cycle(
     return any(reaches(lower_id, upper_id, set()) for lower_id in lower_ids)
 
 
+def _resolve_members(
+    names: list[str],
+    by_name: dict[str, list[BlockDevice]],
+) -> tuple[list[BlockDevice], bool]:
+    """Resolve member names and report whether every name was unambiguous."""
+    members: list[BlockDevice] = []
+    complete = True
+    for name in names:
+        candidates = by_name.get(name, [])
+        if len(candidates) != 1:
+            complete = False
+            continue
+        members.append(candidates[0])
+    return members, complete
+
+
+def _unique_members(members: list[BlockDevice]) -> list[BlockDevice]:
+    """Deduplicate aliases while retaining only resolved member devices."""
+    unique_members: list[BlockDevice] = []
+    member_ids: set[str] = set()
+    for member in members:
+        identity = canonical_device_path(member.path) or member.path
+        if identity not in member_ids:
+            member_ids.add(identity)
+            unique_members.append(member)
+    return unique_members
+
+
 def collect_mdraid_relationships(
     devices: list[BlockDevice],
     *,
@@ -154,30 +189,26 @@ def collect_mdraid_relationships(
         except OSError:
             member_names = []
 
-        members: list[BlockDevice] = []
-        unresolved = False
-        for member_name in member_names:
-            candidates = by_name.get(member_name, [])
-            if len(candidates) != 1:
-                unresolved = True
-                continue
-            members.append(candidates[0])
-
-        if not member_names or unresolved and not members:
+        members, complete = _resolve_members(member_names, by_name)
+        unique_members = _unique_members(members)
+        if complete and len(unique_members) != len(member_names):
+            continue
+        if not member_names or not complete:
             mdadm_names = _mdadm_members(f"/dev/{name}")
-            for member_path in mdadm_names:
-                identity = canonical_device_path(member_path) or member_path
-                candidates = by_identity.get(identity, [])
-                if len(candidates) == 1:
-                    members.append(candidates[0])
+            if mdadm_names is None or not mdadm_names:
+                continue
+            members, complete = _resolve_members(
+                mdadm_names,
+                by_identity,
+            )
+            unique_members = _unique_members(members)
+            if (
+                not complete
+                or len(unique_members) != len(members)
+                or len(unique_members) != len(mdadm_names)
+            ):
+                continue
 
-        unique_members: list[BlockDevice] = []
-        member_ids: set[str] = set()
-        for member in members:
-            identity = canonical_device_path(member.path) or member.path
-            if identity not in member_ids:
-                member_ids.add(identity)
-                unique_members.append(member)
         if not unique_members:
             continue
 

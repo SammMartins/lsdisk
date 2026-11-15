@@ -1,230 +1,207 @@
 # Architecture
 
-lsdisk is a Linux storage inventory application built around a simple
-principle: collect facts from the host, normalize them, analyze them
-carefully, and present them without hiding uncertainty.
+lsdisk is a read-only Linux storage inventory application. Its architecture
+collects host facts, normalizes them into models, derives conservative
+relationships and capacity views, serializes stable JSON, and renders
+terminal presentations without allowing UI code to query the operating
+system directly.
 
 ## Design goals
 
--   **Cross-distribution:** avoid unnecessary assumptions about a
-    particular Linux distribution.
--   **Read-only inspection:** do not modify disks, partitions, or
-    filesystems.
--   **Data integrity:** distinguish physical devices, partitions,
-    filesystem capacity, and mountpoints.
--   **Graceful degradation:** missing interfaces or inaccessible
-    information should not crash the entire inventory where recovery is
-    possible.
--   **Testability:** keep core logic separable from the developer's real
-    storage devices and terminal.
+- **Cross-distribution:** use standard Linux interfaces first and treat
+  external utilities as optional integrations.
+- **Read-only inspection:** never modify disks, filesystems, mounts, LVM, or
+  RAID state.
+- **Data integrity:** distinguish physical capacity, partition geometry,
+  filesystem capacity, active mounts, and persistent configuration.
+- **Graceful degradation:** isolate unavailable, malformed, ambiguous, or
+  inaccessible data.
+- **Testability:** keep collection, analysis, serialization, and rendering
+  independently testable with fixtures and mocks.
 
-## Data flow
+## Execution flow
 
-``` text
-Linux interfaces and available tools
-                 |
-                 v
-              Collectors
-                 |
-                 v
-        Normalized data models
-                 |
-                 v
-               Analyzers
-                 |
-           +-----+-----+
-           |           |
-           v           v
-       Terminal UI   JSON output
+`lsdisk.main.main()` builds the argparse parser and handles `--help` and
+`--version` before collection. Normal execution calls
+`inventory.collect_storage_inventory()`, then selects one output path:
+
+1. `--json` calls `serialization.inventory_to_dict()` and prints JSON.
+2. `--classic` calls `ui.terminal.render_classic()`.
+3. `--table-mode` calls `render_simple()` or `render_all()` depending on
+   `--all`.
+4. Otherwise `render_compact()` renders the default or expanded compact view.
+
+Collection errors of type `OSError`, `RuntimeError`, or `ValueError` are
+reported as `lsdisk: error: ...` and return status 1. Individual collectors
+normally return empty or incomplete results for unavailable interfaces so one
+device or optional utility does not abort the whole inventory.
+
+## Collection and inventory
+
+### `collectors/block_devices.py`
+
+`collect_block_devices()` walks `/sys/class/block`, reads device size in
+512-byte sectors, identifies disks, partitions, and optical devices, and
+builds the parent/child hierarchy. It also reads model, rotational status,
+transport hints, and whether a disk appears physical or virtual. Physical
+classification requires a non-virtual disk with a device link; it is not
+inferred from a device-name prefix.
+
+### `collectors/filesystems.py`
+
+`collect_filesystems()` parses `/proc/self/mountinfo` and uses
+`os.statvfs()` for each still-accessible mountpoint. It records source,
+filesystem type, mountpoint, device ID, filesystem root, total/free/available
+bytes, and derives used bytes. A mount that disappears or has inconsistent
+statistics is skipped.
+
+### `collectors/filesystem_metadata.py`
+
+`collect_lsblk_metadata()` reads `lsblk --json --output PATH,FSTYPE,LABEL,UUID`
+when available. `probe_filesystem_outcome()` invokes
+`blkid --probe --output export DEVICE` without mounting the device. Probe
+states are `recognized`, `no_signature`, `unavailable`, and `error`.
+Recognized probes may provide filesystem type, label, and UUID; inconclusive
+states never become fabricated metadata.
+
+### `collectors/partition_metadata.py`
+
+`collect_partition_metadata()` reads `lsblk --json --bytes` for path, type,
+size, start, logical/physical sector sizes, partition-table type, label,
+type identifier, and flags. Geometry is attached to existing devices by
+`apply_partition_metadata()`. Invalid or incomplete boundaries are retained
+as `None`.
+
+### `collectors/fstab.py`
+
+`collect_fstab_entries()` parses valid rows from `/etc/fstab`, including
+escaped fields, options, dump, and pass values. It preserves UUID, LABEL,
+unresolved, and non-block sources as text. It never resolves, mounts, or
+equates an fstab row with an active mount.
+
+### Storage relationships
+
+`collectors/storage_relationships.py` uses verified parent names and sysfs
+`slaves` directories. A logical device backed by a lower device carrying a
+`crypto_LUKS` signature is classified as `encrypted_mapping`; other verified
+edges are `backed_by`. Ambiguous devices and cycles are omitted.
+
+`collectors/lvm.py` optionally reads machine-readable, read-only `pvs`,
+`vgs`, and `lvs` reports. It emits verified PV-to-device, VG-to-PV, and
+LV-to-VG relationships, skipping missing, duplicate, malformed, or
+ambiguous records.
+
+`collectors/mdraid.py` discovers active MD arrays from `/sys/class/block`
+slave directories, uses `/proc/mdstat` as supporting active-array metadata,
+and optionally invokes `mdadm --detail --export` when sysfs resolution is
+incomplete. It emits `raid_member` relationships only when every expected
+member is resolved and validated; incomplete, duplicate, or malformed member
+metadata causes that array to be omitted without affecting other arrays.
+lsdisk never assembles, activates, stops, creates, repairs, or manages arrays.
+
+`inventory.py` combines these collectors, associates mounted filesystem
+sources with devices through canonical paths, applies filesystem metadata,
+groups filesystem records, and returns `StorageInventory` containing devices,
+filesystems, groups, relationships, fstab entries, and unallocated regions.
+
+## Models and analysis
+
+`models.py` defines `BlockDevice`, `FilesystemUsage`, `PartitionMetadata`,
+`FstabEntry`, `FilesystemProbe`, `StorageDeviceReference`,
+`StorageRelationship`, and `UnallocatedRegion`. Device kinds are
+`physical`, `partition`, `logical`, and `unknown`; relationship types include
+`backed_by`, `encrypted_mapping`, `lvm_physical_volume`,
+`lvm_logical_volume`, `raid_member`, and `unknown`.
+
+`analyzers/filesystems.py` classifies mounted filesystems as
+`persistent`, `network`, `application_image`, `temporary`, `virtual`, or
+`unknown`, and groups records by device ID plus filesystem type when
+available, otherwise source plus filesystem type. Grouping prevents repeated
+mount views such as Btrfs subvolumes from multiplying capacity.
+
+`analyzers/capacity.py` formats binary byte units and identifies physical
+disks as physical-capacity owners. Partitions and logical layers remain in
+detailed inventory but are not independently added to physical totals.
+
+### Partition geometry and unallocated regions
+
+`analyzers/partitions.py` accepts a disk only when it has a positive size,
+logical sector size, children, and complete child geometry. `lsblk` start
+values and derived end values use inclusive 512-byte sectors, even when the
+device logical sector size is 4096 bytes. Conversion is:
+
+```text
+start_bytes = start_sector * 512
+end_bytes   = (end_sector + 1) * 512 - 1
+size_bytes  = end_bytes - start_bytes + 1
 ```
 
-Collection and presentation are separate responsibilities. The UI should
-consume the normalized inventory rather than call operating-system
-interfaces directly.
+The disk size and every partition boundary must be divisible by 512 and
+aligned to the reported logical sector size. A partition must satisfy
+`0 <= start <= end < disk_sectors`. Sorted partitions must not overlap.
+Invalid, reversed, duplicate, overlapping, out-of-capacity, or misaligned
+geometry invalidates gap analysis for that disk. The invalid disk does not
+suppress valid regions found on other disks.
 
-## Components
+For valid geometry, gaps before, between, and after partitions are emitted
+as byte-valued `UnallocatedRegion` records. These are verified address
+gaps, not free filesystem capacity and not advice that a region is safe to
+partition.
 
-### Collectors
+## Serialization
 
-Collectors retrieve information from the running system, including block
-devices, partitions, mountpoints, and capacity statistics. A collector
-should handle unavailable or malformed data deliberately and avoid
-assuming that every device has a mounted filesystem.
+`serialization.py` produces schema version 1. Both modes always include
+`schema_version`, `mode`, `devices`, `filesystems`, `mounts`, and
+`relationships`.
 
-### Models
+Simple JSON selects physical disk roots, recursively includes their children,
+groups only persistent and network filesystems, leaves `mounts` empty, and
+omits partition metadata, fstab, and unallocated regions. Expanded JSON
+selects all root devices, includes all filesystem groups and mount records,
+and adds partition metadata, `fstab`, and `unallocated_regions`. Device and
+mount field contracts are documented in the README.
 
-Models provide consistent representations of block devices and
-filesystem measurements. They preserve distinctions such as total
-capacity, free space, and space available to an unprivileged user where
-the source provides those values.
+Relationship references contain `identifier`, `kind`, `canonical_path`, and
+`filesystem_uuid`. The serializer deduplicates aliases by canonical identity
+and sorts relationships and lower references for deterministic output.
 
-### Analyzers
+## Terminal rendering
 
-Analyzers classify and group filesystem records and calculate derived
-indicators. They must preserve unknown values and avoid misleading
-totals, particularly when multiple mountpoints refer to the same
-underlying filesystem.
+`ui/terminal.py` is a Rich presentation layer. `render_compact()` shows the
+summary, physical or all-device tree, and optional expanded filesystem and
+topology panels. `render_simple()` and `render_all()` use tables. Their
+width allocator removes optional columns first, then gives retained columns
+fixed widths and uses ellipsis overflow. The full compact/table targets are
+100 columns for normal layouts and 120 columns for expanded layouts; the
+actual console width is authoritative.
 
-Filesystem categories are exposed as stable lowercase values in JSON:
-`persistent`, `network`, `application_image`, `temporary`, `virtual`, and
-`unknown`. Application-image detection recognizes DwarFS mounts and
-image-like sources; `tmpfs` and `ramfs` are temporary, while kernel
-filesystems such as `proc`, `sysfs`, `binfmt_misc`, and `overlay` are
-virtual. Desktop FUSE filesystems remain `unknown` unless their behavior is
-specifically established; application images such as `fuse.dwarfs` are
-handled separately. Unknown types remain `unknown` rather than being
-inferred as persistent storage.
+`render_classic()` displays mounted filesystem records with the stable
+seven-column schema `Filesystem`, `Type`, `Size`, `Used`, `Avail`, `Use%`,
+and `Mounted on`. It retains all headers at narrow widths and reduces cell
+widths. A general width warning is emitted only when non-mountpoint
+information is degraded; mountpoint truncation alone does not trigger it.
+Terminal reduction affects presentation only, never inventory or JSON.
 
-### Inventory orchestration
+`ui/styles.py` centralizes the application `PALETTE` and utilization
+thresholds: green below 70%, yellow from 70% to below 90%, and red at 90%
+or higher. `--color never` disables styling without changing values;
+`--color always` forces terminal styling, and `auto` delegates to Rich.
 
-The inventory layer combines collector results, associates filesystem
-sources with discovered devices where possible, and exposes a unified
-structure to the output layers. It also records read-only storage
-relationships when the kernel exposes a verified parent or sysfs slave
-relationship. A logical device backed by a device carrying a recognized
-`crypto_LUKS` signature is classified as an encrypted mapping. Missing
-topology is preserved as unknown; it is never treated as proof that no
-relationship exists.
+## Operating-system interfaces and dependencies
 
-When the optional LVM utilities are available, the inventory also reads
-machine-readable, read-only `pvs`, `vgs`, and `lvs` reports. Verified
-relationships use volume groups as upper layers backed by physical volumes,
-logical volumes as upper layers backed by their volume groups, and physical
-volumes as upper layers backed by a uniquely matched block device. Missing,
-ambiguous, malformed, or unavailable LVM metadata is skipped without
-affecting the generic inventory.
+| Interface or utility | Responsibility |
+|---|---|
+| `/sys/class/block` | Block devices, hierarchy, topology, and MD slaves |
+| `/proc/self/mountinfo` | Active mountpoints, sources, filesystem roots, and IDs |
+| `/etc/fstab` | Persistent mount configuration, parsed without mounting |
+| `os.statvfs()` | Capacity for accessible active mountpoints |
+| `lsblk` | Filesystem metadata and partition geometry |
+| `blkid` | Read-only signatures on devices, including unmounted devices |
+| `pvs`, `vgs`, `lvs` | Optional read-only LVM reports |
+| `/proc/mdstat` and `mdadm` | Optional/supporting MD RAID metadata |
+| Python 3.11+ and Rich 13+ | Runtime and terminal rendering |
 
-Active Linux MD RAID arrays are discovered read-only from `/sys/class/block`
-slave directories. `/proc/mdstat` is used as supporting active-array
-metadata, and `mdadm --detail --export` is used only as an optional fallback
-when sysfs does not resolve any members. An array is represented as an upper
-logical layer with a `RAID_MEMBER` relationship to uniquely resolved member
-devices. Missing or ambiguous members are not invented, and unavailable
-interfaces or `mdadm` do not abort the inventory. lsdisk does not assemble,
-activate, stop, create, repair, or otherwise manage RAID arrays.
-
-Capacity ownership is conservative: physical disks are the owners of
-physical-capacity totals, while partitions and logical devices remain in
-detailed inventory without being independently added to those totals.
-Filesystem capacity is grouped by filesystem identity, so Btrfs
-subvolumes and repeated mount views do not multiply capacity.
-
-### Serialization
-
-The serialization layer converts the normalized inventory into
-machine-readable JSON. Output modes should have explicit, testable
-contracts.
-
-### Terminal UI
-
-The terminal layer uses Rich to render the storage summary, hierarchical
-physical-storage view, expanded filesystem details, tables, and
-utilization bars.
-
-The compact storage summary distinguishes physical capacity from
-mounted-filesystem capacity. Its usage line presents used and
-user-available capacity, while the utilization bar displays the
-percentage. Partition details follow the same pattern: the `Usage` line
-shows used and available capacity, and the bar below it shows
-utilization.
-
-Utilization bars use these thresholds:
-
-  Utilization        Color
-  ------------------ --------
-  Below 70%          Green
-  70% to below 90%   Yellow
-  90% or higher      Red
-
-The bar and displayed percentage should use the same utilization color.
-The empty portion of a bar remains visually subdued. When capacity data
-is unavailable or invalid, the UI must not present a fabricated
-utilization percentage.
-
-The terminal layer is responsible for presentation, not for discovering
-devices or interpreting raw kernel data.
-
-## Data sources
-
-lsdisk prioritizes Python and Linux interfaces, using external tools
-when they provide necessary or more reliable information.
-
-  -----------------------------------------------------------------------
-  Source                              Intended use
-  ----------------------------------- -----------------------------------
-  `/sys`                              Kernel-exposed block-device
-                                      properties and relationships.
-
-  `/proc/self/mountinfo`              Mountpoints, filesystem sources,
-                                      and mount metadata for the current
-                                      process.
-
-  `blkid -p -o export`                 Read-only signature probing for
-                                      filesystem type, label, and UUID,
-                                      including unmounted devices.
-
-  `os.statvfs()`                      Capacity statistics for accessible
-                                      mounted filesystems.
-
-  `lsblk`                             Potential fallback or verification
-                                      source for block-device topology.
-
-  `findmnt`                           Potential supplementary source for
-                                      mount information.
-
-  `udev`                              Potential source of device
-                                      properties when available.
-  -----------------------------------------------------------------------
-
-Availability and behavior can vary across systems. External tools should
-be checked before use, and their output should be parsed defensively.
-
-## Integrity rules
-
-### Physical devices are not filesystems
-
-A drive's physical capacity and a filesystem's usable capacity are
-different measurements. The interface must not present them as
-interchangeable.
-
-### Unmounted does not mean empty
-
-An unmounted partition may contain a filesystem even when its usage
-cannot be measured through `statvfs()`. Until it is identified through a
-reliable source, its filesystem status should remain unknown.
-
-### Avoid double-counting
-
-A physical device, a partition, a logical storage layer, and a mounted
-filesystem can represent related views of the same storage. Btrfs
-subvolumes can also expose the same filesystem capacity through multiple
-mountpoints. Group related records where identity is sufficiently
-established, and do not sum them indiscriminately.
-
-### Unknown is a valid result
-
-If a value cannot be collected reliably, preserve that uncertainty. Do
-not substitute zero, infer an empty filesystem, or display a guess as
-confirmed data.
-
-### Least privilege
-
-Read-only inventory collection should not require administrative
-privileges by default. Any future requirement for elevated access must
-be justified and documented.
-
-## Current scope and planned work
-
-The current MVP discovers block-device topology, collects capacity
-information for mounted filesystems, and performs read-only metadata
-probing for unmounted devices. The following remain planned improvements,
-not guarantees of the current implementation:
-
--   Broader coverage across storage signatures and distributions.
--   Filesystem label and UUID coverage where tools or permissions limit access.
--   Broader, validated handling of Btrfs, LUKS, and other storage layers.
-    RAID level, rebuild state, spare-device state, and usable-capacity
-    calculations are not currently exposed or inferred.
-
-These capabilities should be introduced incrementally, with tests for
-both successful detection and unavailable information.
+No root privilege is required by default. Permissions, device visibility,
+utility availability, and kernel/storage configuration determine which facts
+can be verified. lsdisk does not use a distribution-specific package manager
+or require `findmnt`, `udev`, or a particular desktop environment.

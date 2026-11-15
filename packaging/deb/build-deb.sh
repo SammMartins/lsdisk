@@ -27,7 +27,7 @@ if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
 fi
 
 # If a GitHub Release tag is provided, validate it against the project version.
-# Accepted examples: v0.1.2 and 0.1.2.
+# Accepted examples: v0.1.3 and 0.1.3.
 if [[ -n "${RELEASE_TAG:-}" ]]; then
     if [[ ! "$RELEASE_TAG" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+$ ||
         ( "$RELEASE_TAG" != "$VERSION" && "$RELEASE_TAG" != "v${VERSION}" ) ]]; then

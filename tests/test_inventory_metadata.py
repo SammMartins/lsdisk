@@ -1,12 +1,14 @@
 """Tests for associating probed signatures with block devices."""
 
 import unittest
-from unittest.mock import patch
+from unittest.mock import call, patch
 
 from lsdisk.collectors.filesystem_metadata import FilesystemMetadata
 from lsdisk.inventory import collect_storage_inventory
 from lsdisk.models import (
     BlockDevice,
+    FilesystemProbe,
+    ProbeState,
     StorageDeviceReference,
     StorageRelationship,
     StorageRelationshipType,
@@ -16,12 +18,12 @@ from lsdisk.models import (
 class TestInventoryMetadata(unittest.TestCase):
     @patch("lsdisk.inventory.collect_lsblk_metadata", return_value={})
     @patch("lsdisk.inventory.collect_filesystems", return_value=[])
-    @patch("lsdisk.inventory.probe_filesystem")
+    @patch("lsdisk.inventory.probe_filesystem_outcome")
     @patch("lsdisk.inventory.collect_block_devices")
     def test_collects_metadata_for_unmounted_partition(
             self,
             collect_devices,
-            probe_filesystem,
+            probe_outcome,
             _collect_filesystems,
             _collect_lsblk_metadata,
     ):
@@ -41,12 +43,15 @@ class TestInventoryMetadata(unittest.TestCase):
             children=[partition],
         )
         collect_devices.return_value = [disk]
-        probe_filesystem.side_effect = [
-            None,
-            FilesystemMetadata(
-                filesystem_type="ext4",
-                label="DATA",
-                uuid="ext4-uuid",
+        probe_outcome.side_effect = [
+            FilesystemProbe(ProbeState.NO_SIGNATURE),
+            FilesystemProbe(
+                ProbeState.RECOGNIZED,
+                FilesystemMetadata(
+                    filesystem_type="ext4",
+                    label="DATA",
+                    uuid="ext4-uuid",
+                ),
             ),
         ]
 
@@ -56,15 +61,21 @@ class TestInventoryMetadata(unittest.TestCase):
         self.assertEqual(partition.filesystem_label, "DATA")
         self.assertEqual(partition.filesystem_uuid, "ext4-uuid")
         self.assertEqual(partition.mountpoints, [])
+        self.assertEqual(
+            partition.filesystem_probe_state, ProbeState.RECOGNIZED
+        )
+        self.assertEqual(
+            disk.filesystem_probe_state, ProbeState.NO_SIGNATURE
+        )
 
     @patch("lsdisk.inventory.collect_lsblk_metadata")
     @patch("lsdisk.inventory.collect_filesystems", return_value=[])
-    @patch("lsdisk.inventory.probe_filesystem")
+    @patch("lsdisk.inventory.probe_filesystem_outcome")
     @patch("lsdisk.inventory.collect_block_devices")
     def test_fallback_preserves_lsblk_values(
         self,
         collect_devices,
-        probe_filesystem,
+        probe_outcome,
         _collect_filesystems,
         collect_lsblk_metadata,
     ):
@@ -82,10 +93,13 @@ class TestInventoryMetadata(unittest.TestCase):
                 uuid="luks-uuid",
             )
         }
-        probe_filesystem.return_value = FilesystemMetadata(
-            filesystem_type="ext4",
-            label=None,
-            uuid=None,
+        probe_outcome.return_value = FilesystemProbe(
+            ProbeState.RECOGNIZED,
+            FilesystemMetadata(
+                filesystem_type="ext4",
+                label=None,
+                uuid=None,
+            ),
         )
 
         inventory = collect_storage_inventory()
@@ -96,12 +110,12 @@ class TestInventoryMetadata(unittest.TestCase):
 
     @patch("lsdisk.inventory.collect_lsblk_metadata")
     @patch("lsdisk.inventory.collect_filesystems", return_value=[])
-    @patch("lsdisk.inventory.probe_filesystem")
+    @patch("lsdisk.inventory.probe_filesystem_outcome")
     @patch("lsdisk.inventory.collect_block_devices")
     def test_skips_probe_when_lsblk_has_complete_metadata(
         self,
         collect_devices,
-        probe_filesystem,
+        probe_outcome,
         _collect_filesystems,
         collect_lsblk_metadata,
     ):
@@ -122,19 +136,71 @@ class TestInventoryMetadata(unittest.TestCase):
 
         collect_storage_inventory()
 
-        probe_filesystem.assert_not_called()
+        probe_outcome.assert_not_called()
+
+    @patch("lsdisk.inventory.collect_lsblk_metadata", return_value={})
+    @patch("lsdisk.inventory.collect_filesystems", return_value=[])
+    @patch("lsdisk.inventory.probe_filesystem_outcome")
+    @patch("lsdisk.inventory.collect_block_devices")
+    def test_probes_each_eligible_device_exactly_once(
+        self,
+        collect_devices,
+        probe_outcome,
+        _collect_filesystems,
+        _collect_lsblk_metadata,
+    ):
+        recognized = BlockDevice(
+            name="sda1",
+            path="/dev/sda1",
+            device_type="part",
+            size_bytes=1024,
+        )
+        inconclusive = BlockDevice(
+            name="sdb1",
+            path="/dev/sdb1",
+            device_type="part",
+            size_bytes=1024,
+        )
+        collect_devices.return_value = [recognized, inconclusive]
+        probe_outcome.side_effect = [
+            FilesystemProbe(
+                ProbeState.RECOGNIZED,
+                FilesystemMetadata(
+                    filesystem_type="ext4",
+                    label="DATA",
+                    uuid="ext4-uuid",
+                ),
+            ),
+            FilesystemProbe(ProbeState.ERROR),
+        ]
+
+        inventory = collect_storage_inventory()
+
+        self.assertEqual(
+            probe_outcome.call_args_list,
+            [call("/dev/sda1"), call("/dev/sdb1")],
+        )
+        self.assertEqual(probe_outcome.call_count, 2)
+        self.assertEqual(
+            inventory.devices[0].filesystem_probe_state,
+            ProbeState.RECOGNIZED,
+        )
+        self.assertEqual(
+            inventory.devices[1].filesystem_probe_state,
+            ProbeState.ERROR,
+        )
 
     @patch("lsdisk.inventory.collect_lvm_relationships")
     @patch("lsdisk.inventory.collect_mdraid_relationships", return_value=[])
     @patch("lsdisk.inventory.collect_storage_relationships", return_value=[])
     @patch("lsdisk.inventory.collect_lsblk_metadata", return_value={})
     @patch("lsdisk.inventory.collect_filesystems", return_value=[])
-    @patch("lsdisk.inventory.probe_filesystem", return_value=None)
+    @patch("lsdisk.inventory.probe_filesystem_outcome")
     @patch("lsdisk.inventory.collect_block_devices")
     def test_integrates_lvm_relationships_without_changing_devices(
         self,
         collect_devices,
-        _probe,
+        probe_outcome,
         _collect_filesystems,
         _collect_lsblk_metadata,
         _collect_storage_relationships,
@@ -148,6 +214,9 @@ class TestInventoryMetadata(unittest.TestCase):
             size_bytes=1024,
         )
         collect_devices.return_value = [device]
+        probe_outcome.return_value = FilesystemProbe(
+            ProbeState.NO_SIGNATURE
+        )
         relationship = StorageRelationship(
             relationship_type=StorageRelationshipType.LVM_LOGICAL_VOLUME,
             upper=StorageDeviceReference("lvm:lv:data/root"),
@@ -165,12 +234,12 @@ class TestInventoryMetadata(unittest.TestCase):
     @patch("lsdisk.inventory.collect_storage_relationships", return_value=[])
     @patch("lsdisk.inventory.collect_lsblk_metadata", return_value={})
     @patch("lsdisk.inventory.collect_filesystems", return_value=[])
-    @patch("lsdisk.inventory.probe_filesystem", return_value=None)
+    @patch("lsdisk.inventory.probe_filesystem_outcome")
     @patch("lsdisk.inventory.collect_block_devices")
     def test_integrates_mdraid_relationships_without_changing_devices(
         self,
         collect_devices,
-        _probe,
+        probe_outcome,
         _collect_filesystems,
         _collect_lsblk_metadata,
         _collect_storage_relationships,
@@ -184,6 +253,9 @@ class TestInventoryMetadata(unittest.TestCase):
             size_bytes=1024,
         )
         collect_devices.return_value = [device]
+        probe_outcome.return_value = FilesystemProbe(
+            ProbeState.NO_SIGNATURE
+        )
         relationship = StorageRelationship(
             relationship_type=StorageRelationshipType.RAID_MEMBER,
             upper=StorageDeviceReference("/dev/md0"),

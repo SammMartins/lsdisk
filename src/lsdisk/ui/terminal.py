@@ -14,10 +14,24 @@ from lsdisk.analyzers.filesystems import (
     filesystem_identity,
 )
 from lsdisk.inventory import StorageInventory, walk_devices
-from lsdisk.models import BlockDevice
+from lsdisk.models import (
+    BlockDevice,
+    StorageDeviceKind,
+    StorageDeviceReference,
+    StorageRelationship,
+    storage_reference_identity,
+)
+from lsdisk.ui.styles import PALETTE, usage_style
 
 
 SUMMARY_CATEGORIES = {"persistent", "network"}
+COMPACT_MIN_WIDTH = 100
+TABLE_MIN_WIDTH = 100
+EXPANDED_MIN_WIDTH = 120
+WIDTH_NOTICE = (
+    "Warning: Terminal width is limited; optional columns or long values "
+    "have been abbreviated."
+)
 CATEGORY_LABELS = {
     "persistent": "Persistent Storage",
     "network": "Network",
@@ -44,6 +58,127 @@ def create_console(color: str = "auto") -> Console:
     return Console()
 
 
+def _terminal_width(console: Console, fallback: int = 80) -> int:
+    """Return the console width, with a conservative fallback."""
+    try:
+        width = int(console.width)
+    except (AttributeError, TypeError, ValueError):
+        return fallback
+    return width if width > 0 else fallback
+
+
+def _abbreviate(value: str, width: int) -> str:
+    """Shorten a value only for a constrained terminal presentation."""
+    if len(value) <= width:
+        return value
+    if width <= 3:
+        return value[:width]
+    return f"{value[:width - 3]}..."
+
+
+def _render_width(console: Console, *, panel: bool = False) -> int:
+    """Return the width available to a renderable."""
+    width = _terminal_width(console)
+    return max(1, width - 4 if panel else width)
+
+
+def _cell_length(value: object) -> int:
+    """Return the plain-text length of a table cell."""
+    return len(str(value))
+
+
+def _allocate_column_widths(
+    headers: list[str],
+    rows: list[list[object]],
+    available_width: int,
+    *,
+    optional: set[int] | None = None,
+    priority: tuple[int, ...] = (),
+) -> tuple[list[int], list[int], bool]:
+    """Fit columns to a renderable width without starving key values."""
+    optional = optional or set()
+    overhead = 3 * len(headers) + 1
+    content_width = max(0, available_width - overhead)
+    preferred = [
+        max([
+            len(header),
+            *(
+                _cell_length(row[index])
+                for row in rows
+                if index < len(row)
+            ),
+        ])
+        for index, header in enumerate(headers)
+    ]
+    widths = [len(header) for header in headers]
+    kept = list(range(len(headers)))
+    reduced = False
+
+    while kept and sum(widths[index] for index in kept) > content_width:
+        removable = [
+            index for index in reversed(kept) if index in optional
+        ]
+        if not removable:
+            break
+        kept.remove(removable[0])
+        reduced = True
+
+    content_width = max(0, available_width - (3 * len(kept) + 1))
+    while (
+        kept
+        and sum(preferred[index] for index in kept) > content_width
+    ):
+        removable = [
+            index for index in reversed(kept) if index in optional
+        ]
+        if not removable:
+            break
+        kept.remove(removable[0])
+        reduced = True
+        content_width = max(0, available_width - (3 * len(kept) + 1))
+
+    remaining = content_width - sum(widths[index] for index in kept)
+    order = priority + tuple(
+        index for index in kept if index not in priority
+    )
+    while remaining > 0:
+        grew = False
+        for index in order:
+            if index not in kept or widths[index] >= preferred[index]:
+                continue
+            widths[index] += 1
+            remaining -= 1
+            grew = True
+            if remaining == 0:
+                break
+        if not grew:
+            break
+
+    if any(widths[index] < preferred[index] for index in kept):
+        reduced = True
+    return widths, kept, reduced
+
+
+def _add_sized_columns(
+    table: Table,
+    headers: list[tuple[str, str | None]],
+    widths: list[int],
+) -> None:
+    """Add fixed-width columns so Rich and enclosing panels share a budget."""
+    for (header, style), width in zip(headers, widths):
+        table.add_column(
+            header,
+            style=style,
+            width=max(1, width),
+            justify="right" if header in {
+                "Total", "Used", "Available", "Used %", "Size", "Avail",
+                "Use%",
+            } else "left",
+            no_wrap=True,
+            overflow="ellipsis",
+        )
+
+
 def _device_type(device: BlockDevice) -> str:
     """Return a human-readable device classification."""
     if device.device_type == "disk":
@@ -62,18 +197,34 @@ def _device_type(device: BlockDevice) -> str:
     return device.device_type
 
 
-def _device_table(*, detailed: bool = False) -> Table:
-    table = Table(title="Block Devices")
-    table.add_column("Device", style="cyan")
-    table.add_column("Type")
-    table.add_column("Capacity", justify="right")
-    table.add_column("Filesystem")
-    table.add_column("Mountpoints")
+def _device_table(
+    *,
+    detailed: bool = False,
+    reduced: bool = False,
+    width: int | None = None,
+) -> Table:
+    table = Table(
+        title="Block Devices",
+        header_style=PALETTE["heading"],
+        padding=(0, 1),
+        expand=False,
+        show_lines=False,
+        width=width,
+    )
+    table.add_column("Device", style=PALETTE["device"], no_wrap=True)
+    table.add_column("Type", no_wrap=True)
+    table.add_column("Capacity", justify="right", no_wrap=True)
+    if reduced:
+        table.add_column("Filesystem", overflow="ellipsis", max_width=16)
+        table.add_column("Mount", overflow="ellipsis", max_width=20)
+    else:
+        table.add_column("Filesystem", no_wrap=True)
+        table.add_column("Mountpoints", no_wrap=True)
 
-    if detailed:
-        table.add_column("Model")
-        table.add_column("Transport")
-        table.add_column("Media")
+    if detailed and not reduced:
+        table.add_column("Model", no_wrap=True)
+        table.add_column("Transport", no_wrap=True)
+        table.add_column("Media", no_wrap=True)
 
     return table
 
@@ -83,12 +234,16 @@ def _add_device_rows(
     devices: list[BlockDevice],
     *,
     detailed: bool = False,
+    reduced: bool = False,
     depth: int = 0,
 ) -> None:
     """Add a recursive device hierarchy to a table."""
     for device in devices:
         name = f"{'  ' * depth}{device.name}"
         mountpoints = ", ".join(device.mountpoints) or "Not mounted"
+        if reduced:
+            name = f"{'  ' * depth}{_abbreviate(device.name, 20)}"
+            mountpoints = _abbreviate(mountpoints, 20)
 
         row = [
             name,
@@ -98,7 +253,7 @@ def _add_device_rows(
             mountpoints,
         ]
 
-        if detailed:
+        if detailed and not reduced:
             if device.rotational is True:
                 media = "Rotational"
             elif device.rotational is False:
@@ -118,47 +273,352 @@ def _add_device_rows(
             table,
             device.children,
             detailed=detailed,
+            reduced=reduced,
             depth=depth + 1,
         )
 
 
-def _filesystem_group_table() -> Table:
-    table = Table(title="Filesystem Capacity Summary")
-    table.add_column("Filesystem", style="cyan")
-    table.add_column("Category")
-    table.add_column("Source")
-    table.add_column("Total", justify="right")
-    table.add_column("Used", justify="right")
-    table.add_column("Available", justify="right")
-    table.add_column("Used %", justify="right")
-    table.add_column("Mountpoints")
+def _relationship_label(
+    reference: StorageDeviceReference,
+    *,
+    width: int | None = None,
+) -> Text:
+    """Format a topology reference while retaining its canonical identity."""
+    identifier = (
+        _abbreviate(reference.identifier, width)
+        if width is not None
+        else reference.identifier
+    )
+    label = Text(identifier, style="bold cyan")
+    label.append(f"  [{reference.kind.value}]", style="dim")
+    return label
+
+
+def _relationship_choice_key(
+    relationship: StorageRelationship,
+) -> tuple[bool, str, str]:
+    """Prefer canonical upper labels when duplicate edges are equivalent."""
+    upper = relationship.upper
+    return (
+        upper.identifier != upper.canonical_path,
+        upper.identifier,
+        repr(relationship),
+    )
+
+
+def _topology_tree(
+    relationships: list[StorageRelationship],
+    *,
+    narrow: bool = False,
+) -> Tree:
+    """Build a stable, readable view of verified storage-layer edges."""
+    root = Tree(
+        Text("Storage Topology", style="bold cyan"),
+        guide_style="dim",
+    )
+    unique: dict[
+        tuple[str, str, tuple[str, ...]], StorageRelationship
+    ] = {}
+    for relationship in relationships:
+        lower = tuple(sorted({
+            storage_reference_identity(reference)
+            for reference in relationship.lower
+        }))
+        if not lower:
+            continue
+        key = (
+            relationship.relationship_type,
+            storage_reference_identity(relationship.upper),
+            lower,
+        )
+        current = unique.get(key)
+        if current is None or _relationship_choice_key(relationship) < (
+            _relationship_choice_key(current)
+        ):
+            unique[key] = relationship
+
+    for key in sorted(unique):
+        relationship = unique[key]
+        upper = root.add(_relationship_label(
+            relationship.upper,
+            width=28 if narrow else None,
+        ))
+        lower_by_identity: dict[str, StorageDeviceReference] = {}
+        for reference in sorted(
+            relationship.lower,
+            key=lambda item: (
+                storage_reference_identity(item),
+                item.identifier != item.canonical_path,
+                item.identifier,
+                item.kind.value,
+                item.filesystem_uuid or "",
+            ),
+        ):
+            lower_by_identity.setdefault(
+                storage_reference_identity(reference),
+                reference,
+            )
+        for reference in (
+            lower_by_identity[identity]
+            for identity in sorted(lower_by_identity)
+        ):
+            lower = Text(
+                f"{relationship.relationship_type} -> ",
+                style="yellow",
+            )
+            lower.append_text(_relationship_label(
+                reference,
+                width=28 if narrow else None,
+            ))
+            upper.add(lower)
+
+    return root
+
+
+def _render_topology(
+    inventory: StorageInventory,
+    console: Console,
+) -> bool:
+    """Display only relationships verified by the collectors."""
+    relationships = [
+        relationship
+        for relationship in inventory.relationships
+        if not (
+            relationship.upper.kind is StorageDeviceKind.PARTITION
+            and relationship.lower
+            and all(
+                reference.kind is StorageDeviceKind.PHYSICAL
+                for reference in relationship.lower
+            )
+        )
+    ]
+    if not relationships:
+        return False
+    console.print(Panel(
+        _topology_tree(
+            relationships,
+            narrow=_terminal_width(console) < EXPANDED_MIN_WIDTH,
+        ),
+        title="Storage Topology",
+        subtitle="Upper layers point to verified lower layers",
+        border_style="blue",
+    ))
+    return True
+
+
+def _render_partition_inventory(
+    inventory: StorageInventory,
+    console: Console,
+    *,
+    reduced: bool = False,
+) -> None:
+    """Show geometry and persistent configuration in expanded output."""
+    rows = Table(
+        title="Partition Geometry",
+        header_style=PALETTE["heading"],
+        padding=(0, 1),
+        expand=False,
+    )
+    rows.add_column(
+        "Device", style=PALETTE["device"], no_wrap=True,
+        overflow="ellipsis", max_width=16 if reduced else None,
+    )
+    rows.add_column("Table" if not reduced else "Tbl", no_wrap=True)
+    rows.add_column("Logical" if not reduced else "Log", justify="right", no_wrap=True)
+    rows.add_column("Physical" if not reduced else "Phy", justify="right", no_wrap=True)
+    rows.add_column("Start sector" if not reduced else "Start", justify="right", no_wrap=True)
+    rows.add_column("End sector" if not reduced else "End", justify="right", no_wrap=True)
+    rows.add_column("Name", overflow="ellipsis", max_width=12 if reduced else 18)
+    rows.add_column("Type", overflow="ellipsis", max_width=12 if reduced else 18)
+    for device in walk_devices(inventory.devices):
+        metadata = device.partition_metadata
+        if metadata is None:
+            continue
+        rows.add_row(
+            _abbreviate(device.path, 16) if reduced else device.path,
+            metadata.partition_table or "Unknown",
+            str(metadata.logical_sector_size or "N/A"),
+            str(metadata.physical_sector_size or "N/A"),
+            str(
+                metadata.start_sector
+                if metadata.start_sector is not None
+                else "N/A"
+            ),
+            str(
+                metadata.end_sector
+                if metadata.end_sector is not None
+                else "N/A"
+            ),
+            _abbreviate(metadata.partition_name or "N/A", 12)
+            if reduced else metadata.partition_name or "N/A",
+            _abbreviate(metadata.partition_type or "N/A", 12)
+            if reduced else metadata.partition_type or "N/A",
+        )
+    if rows.row_count:
+        console.print(rows)
+
+    regions = Table(
+        title="Unallocated Disk Regions (bytes)",
+        header_style=PALETTE["heading"],
+        padding=(0, 1),
+        expand=False,
+    )
+    regions.add_column(
+        "Disk", style=PALETTE["device"], overflow="ellipsis",
+        max_width=16 if reduced else None,
+    )
+    regions.add_column("Start", justify="right")
+    regions.add_column("End", justify="right")
+    regions.add_column("Size", justify="right")
+    for region in inventory.unallocated_regions:
+        regions.add_row(
+            _abbreviate(region.disk_path, 16) if reduced else region.disk_path,
+            str(region.start_bytes),
+            str(region.end_bytes),
+            str(region.size_bytes),
+        )
+    if regions.row_count:
+        console.print(regions)
+    if inventory.fstab_entries:
+        fstab = Table(
+            title="Persistent Mount Configuration (/etc/fstab)",
+            caption="Configured entries are not proof of currently active mounts.",
+            header_style=PALETTE["heading"],
+            padding=(0, 1),
+            expand=False,
+        )
+        fstab.add_column(
+            "Source",
+            overflow="ellipsis",
+            max_width=24 if reduced else None,
+        )
+        fstab.add_column(
+            "Mountpoint",
+            overflow="ellipsis",
+            max_width=24 if reduced else None,
+        )
+        fstab.add_column("Type", no_wrap=True)
+        fstab.add_column(
+            "Options",
+            overflow="ellipsis",
+            max_width=28 if reduced else None,
+        )
+        fstab.add_column("Dump", no_wrap=True)
+        fstab.add_column("Pass", no_wrap=True)
+        for entry in sorted(
+            inventory.fstab_entries,
+            key=lambda item: (item.mountpoint, item.source),
+        ):
+            fstab.add_row(
+                entry.source,
+                entry.mountpoint,
+                entry.filesystem_type,
+                ",".join(entry.options) or "defaults",
+                entry.dump or "N/A",
+                entry.pass_number or "N/A",
+            )
+        console.print(fstab)
+        console.print(
+            Text(
+                f"Persistent mount configuration entries: "
+                f"{len(inventory.fstab_entries)} (not proof of active mounts)",
+                style=PALETTE["muted"],
+            )
+        )
+
+
+def _filesystem_group_table(
+    *,
+    width: int | None = None,
+    include_category: bool = True,
+    widths: list[int] | None = None,
+) -> Table:
+    headers = [
+        ("Filesystem", PALETTE["filesystem"]),
+    ]
+    if include_category:
+        headers.append(("Category", None))
+    headers.extend([
+        ("Source", None),
+        ("Total", None),
+        ("Used", None),
+        ("Available", None),
+        ("Used %", None),
+        ("Mountpoints", None),
+    ])
+    table = Table(
+        title="Filesystem Capacity Summary",
+        header_style=PALETTE["heading"],
+        padding=(0, 1),
+        expand=False,
+        show_lines=False,
+        width=width,
+    )
+    if width is None:
+        for header, style in headers:
+            table.add_column(header, style=style, no_wrap=True)
+    else:
+        _add_sized_columns(
+            table,
+            headers,
+            widths or [len(header) for header, _ in headers],
+        )
     return table
 
 
-def _mount_table() -> Table:
-    table = Table(title="Mounted Filesystems")
-    table.add_column("Mountpoint", style="cyan")
-    table.add_column("Filesystem")
-    table.add_column("Category")
-    table.add_column("Source")
-    table.add_column("Total", justify="right")
-    table.add_column("Used", justify="right")
-    table.add_column("Available", justify="right")
-    table.add_column("Used %", justify="right")
-    table.add_column("Device ID")
-    table.add_column("Filesystem Root")
+def _mount_table(
+    *,
+    width: int | None = None,
+    include_category: bool = True,
+    include_details: bool = True,
+    widths: list[int] | None = None,
+) -> Table:
+    headers = [
+        ("Mountpoint", PALETTE["filesystem"]),
+        ("Filesystem", None),
+    ]
+    if include_category:
+        headers.append(("Category", None))
+    headers.extend([
+        ("Source", None),
+        ("Total", None),
+        ("Used", None),
+        ("Available", None),
+        ("Used %", None),
+    ])
+    if include_details:
+        headers.extend([
+            ("Device ID", None),
+            ("Filesystem Root", None),
+        ])
+    table = Table(
+        title="Mounted Filesystems",
+        header_style=PALETTE["heading"],
+        padding=(0, 1),
+        expand=False,
+        show_lines=False,
+        width=width,
+    )
+    if width is None:
+        for header, style in headers:
+            table.add_column(header, style=style)
+    else:
+        _add_sized_columns(
+            table,
+            headers,
+            widths or [len(header) for header, _ in headers],
+        )
     return table
 
 
-def _add_group_rows(
-    table: Table,
+def _group_rows(
     inventory: StorageInventory,
     *,
     include_all: bool,
-) -> int:
-    """Add unique filesystem groups without repeating capacity."""
-    count = 0
-
+    include_category: bool = True,
+) -> list[list[str]]:
+    """Build unique filesystem group rows without repeating capacity."""
+    rows = []
     for group in inventory.filesystem_groups:
         filesystem = group.representative
         category = classify_filesystem(filesystem)
@@ -167,9 +627,12 @@ def _add_group_rows(
             continue
 
         total = group.total_bytes
-        table.add_row(
+        row = [
             filesystem.filesystem_type,
-            _category_label(category),
+        ]
+        if include_category:
+            row.append(_category_label(category))
+        row.extend([
             filesystem.source,
             format_bytes(total) if total > 0 else "Unavailable",
             format_bytes(group.used_bytes) if total > 0 else "Unavailable",
@@ -180,10 +643,28 @@ def _add_group_rows(
             ),
             f"{filesystem.used_percent:.1f}%" if total > 0 else "N/A",
             ", ".join(group.mountpoints),
-        )
-        count += 1
+        ])
+        rows.append(row)
+    return rows
 
-    return count
+
+def _add_group_rows(
+    table: Table,
+    inventory: StorageInventory,
+    *,
+    include_all: bool,
+    include_category: bool = True,
+) -> int:
+    """Add unique filesystem groups without repeating capacity."""
+    rows = _group_rows(
+        inventory,
+        include_all=include_all,
+        include_category=include_category,
+    )
+    for row in rows:
+        table.add_row(*row)
+
+    return len(rows)
 
 
 def render_simple(
@@ -192,6 +673,7 @@ def render_simple(
 ) -> None:
     """Render the default storage overview."""
     console = console or Console()
+    reduced = _terminal_width(console) < TABLE_MIN_WIDTH
 
     console.print(
         Panel(
@@ -208,18 +690,59 @@ def render_simple(
     ]
 
     if physical_disks:
-        table = _device_table()
-        _add_device_rows(table, physical_disks)
+        table = _device_table(
+            reduced=reduced,
+            width=_render_width(console),
+        )
+        _add_device_rows(table, physical_disks, reduced=reduced)
         console.print(table)
     else:
         console.print("[yellow]No physical disks detected.[/yellow]")
 
-    filesystems = _filesystem_group_table()
-    count = _add_group_rows(
-        filesystems,
+    group_rows = _group_rows(
         inventory,
         include_all=False,
+        include_category=True,
     )
+    headers = [
+        ("Filesystem", PALETTE["filesystem"]),
+        ("Category", None),
+        ("Source", None),
+        ("Total", None),
+        ("Used", None),
+        ("Available", None),
+        ("Used %", None),
+        ("Mountpoints", None),
+    ]
+    raw_headers = [header for header, _ in headers]
+    widths, kept, table_reduced = _allocate_column_widths(
+        raw_headers,
+        group_rows,
+        _render_width(console),
+        optional={1},
+        priority=(3, 4, 5, 6, 0, 2, 7),
+    )
+    headers = [headers[index] for index in kept]
+    group_rows = [
+        [row[index] for index in kept]
+        for row in group_rows
+    ]
+    filesystems = Table(
+        title="Filesystem Capacity Summary",
+        header_style=PALETTE["heading"],
+        padding=(0, 1),
+        expand=False,
+        show_lines=False,
+        width=_render_width(console),
+    )
+    _add_sized_columns(
+        filesystems,
+        headers,
+        [widths[index] for index in kept],
+    )
+    for row in group_rows:
+        filesystems.add_row(*row)
+    count = len(group_rows)
 
     if count:
         console.print(filesystems)
@@ -227,6 +750,8 @@ def render_simple(
         console.print(
             "[yellow]No persistent or network filesystems detected.[/yellow]"
         )
+    if reduced or table_reduced:
+        console.print(Text(WIDTH_NOTICE, style=PALETTE["warning"]))
 
 
 def render_all(
@@ -235,6 +760,7 @@ def render_all(
 ) -> None:
     """Render the complete storage inventory."""
     console = console or Console()
+    reduced = _terminal_width(console) < EXPANDED_MIN_WIDTH
 
     console.print(
         Panel(
@@ -245,21 +771,26 @@ def render_all(
         )
     )
 
-    devices = _device_table(detailed=True)
+    devices = _device_table(
+        detailed=_terminal_width(console) >= 200,
+        width=_render_width(console),
+    )
     _add_device_rows(
         devices,
         inventory.devices,
-        detailed=True,
+        detailed=_terminal_width(console) >= 200,
     )
     console.print(devices)
 
-    mounts = _mount_table()
+    mount_rows = []
     for filesystem in inventory.filesystems:
         total = filesystem.total_bytes
-        mounts.add_row(
+        row = [
             filesystem.mountpoint,
             filesystem.filesystem_type,
             _category_label(classify_filesystem(filesystem)),
+        ]
+        row.extend([
             filesystem.source,
             format_bytes(total) if total > 0 else "Unavailable",
             format_bytes(filesystem.used_bytes) if total > 0 else "Unavailable",
@@ -271,17 +802,95 @@ def render_all(
             f"{filesystem.used_percent:.1f}%" if total > 0 else "N/A",
             filesystem.device_id or "Unknown",
             filesystem.filesystem_root,
-        )
+        ])
+        mount_rows.append(row)
+    mount_headers = [
+        ("Mountpoint", PALETTE["filesystem"]),
+        ("Filesystem", None),
+        ("Category", None),
+        ("Source", None),
+        ("Total", None),
+        ("Used", None),
+        ("Available", None),
+        ("Used %", None),
+        ("Device ID", None),
+        ("Filesystem Root", None),
+    ]
+    mount_widths, mount_kept, mount_reduced = _allocate_column_widths(
+        [header for header, _ in mount_headers],
+        mount_rows,
+        _render_width(console),
+        optional={2, 8, 9},
+        priority=(4, 5, 6, 7, 0, 1, 3),
+    )
+    mounts = Table(
+        title="Mounted Filesystems",
+        header_style=PALETTE["heading"],
+        padding=(0, 1),
+        expand=False,
+        show_lines=False,
+        width=_render_width(console),
+    )
+    _add_sized_columns(
+        mounts,
+        [mount_headers[index] for index in mount_kept],
+        [mount_widths[index] for index in mount_kept],
+    )
+    for row in mount_rows:
+        mounts.add_row(*(row[index] for index in mount_kept))
     console.print(mounts)
 
-    groups = _filesystem_group_table()
-    _add_group_rows(groups, inventory, include_all=True)
+    group_rows = _group_rows(
+        inventory,
+        include_all=True,
+        include_category=True,
+    )
+    group_headers = [
+        ("Filesystem", PALETTE["filesystem"]),
+        ("Category", None),
+        ("Source", None),
+        ("Total", None),
+        ("Used", None),
+        ("Available", None),
+        ("Used %", None),
+        ("Mountpoints", None),
+    ]
+    group_widths, group_kept, group_reduced = _allocate_column_widths(
+        [header for header, _ in group_headers],
+        group_rows,
+        _render_width(console),
+        optional={1},
+        priority=(3, 4, 5, 6, 0, 2, 7),
+    )
+    groups = Table(
+        title="Filesystem Capacity Summary",
+        header_style=PALETTE["heading"],
+        padding=(0, 1),
+        expand=False,
+        show_lines=False,
+        width=_render_width(console),
+    )
+    _add_sized_columns(
+        groups,
+        [group_headers[index] for index in group_kept],
+        [group_widths[index] for index in group_kept],
+    )
+    for row in group_rows:
+        groups.add_row(*(row[index] for index in group_kept))
     console.print(groups)
+    _render_topology(inventory, console)
+    _render_partition_inventory(
+        inventory,
+        console,
+        reduced=reduced,
+    )
 
     console.print(
         f"\nDiscovered mountpoints: {len(inventory.filesystems)}"
         f" | Unique filesystem groups: {len(inventory.filesystem_groups)}"
     )
+    if reduced or mount_reduced or group_reduced:
+        console.print(Text(WIDTH_NOTICE, style=PALETTE["warning"]))
 
 
 def _source_key(source: str) -> str:
@@ -310,11 +919,7 @@ def _percentage(used: int, total: int) -> str:
 
 def _usage_color(percentage: float) -> str:
     """Select a color based on filesystem utilization."""
-    if percentage >= 90:
-        return "red"
-    if percentage >= 70:
-        return "yellow"
-    return "green"
+    return usage_style(percentage)
 
 
 def _local_filesystem_groups(
@@ -368,6 +973,7 @@ def _add_compact_device(
     groups_by_source: dict,
     *,
     detailed: bool,
+    reduced: bool = False,
 ) -> None:
     """Add a device and its filesystem information to a compact tree."""
     label = Text()
@@ -388,10 +994,13 @@ def _add_compact_device(
             label.append("  SSD/Flash", style="green")
 
         if device.model:
-            label.append(f"  {device.model}", style="dim")
+            model = _abbreviate(device.model, 20) if reduced else device.model
+            label.append(f"  {model}", style="dim")
 
-        if detailed and device.transport:
+        if device.transport and not reduced:
             label.append(f"  [{device.transport}]", style="dim")
+        elif device.transport and detailed:
+            label.append(f"  [{_abbreviate(device.transport, 10)}]", style="dim")
 
     elif device.device_type == "part":
         label.append(
@@ -453,6 +1062,7 @@ def _add_compact_device(
             child,
             groups_by_source,
             detailed=detailed,
+            reduced=reduced,
         )
 
 
@@ -620,6 +1230,7 @@ def render_compact(
 ) -> None:
     """Render the default compact view or the complete compact inventory."""
     console = console or Console()
+    reduced = _terminal_width(console) < COMPACT_MIN_WIDTH
 
     console.print(
         Panel(
@@ -654,6 +1265,7 @@ def render_compact(
             device,
             groups_by_source,
             detailed=include_all,
+            reduced=reduced,
         )
 
     if visible_devices:
@@ -663,3 +1275,100 @@ def render_compact(
 
     if include_all:
         _render_compact_mounts(inventory, console)
+        _render_topology(inventory, console)
+        _render_partition_inventory(
+            inventory,
+            console,
+            reduced=reduced,
+        )
+    if reduced:
+        note = WIDTH_NOTICE
+        if include_all:
+            note += " Run 'lsdisk' for the compact view."
+        console.print(Text(note, style=PALETTE["warning"]))
+
+
+def render_classic(
+    inventory: StorageInventory,
+    console: Console | None = None,
+) -> None:
+    """Render a concise df-like filesystem overview using shared inventory."""
+    console = console or Console()
+    panel_width = _terminal_width(console)
+    table_width = _render_width(console, panel=True)
+    rows = []
+    for filesystem in sorted(
+        inventory.filesystems,
+        key=lambda item: item.mountpoint,
+    ):
+        rows.append([
+            filesystem.source,
+            filesystem.filesystem_type,
+            format_bytes(filesystem.total_bytes)
+            if filesystem.total_bytes else "N/A",
+            format_bytes(filesystem.used_bytes)
+            if filesystem.total_bytes else "N/A",
+            format_bytes(filesystem.available_bytes)
+            if filesystem.total_bytes else "N/A",
+            _percentage(filesystem.used_bytes, filesystem.total_bytes),
+            filesystem.mountpoint,
+        ])
+
+    headers = [
+        ("Filesystem", PALETTE["filesystem"]),
+        ("Type", None),
+        ("Size", None),
+        ("Used", None),
+        ("Avail", None),
+        ("Use%", None),
+        ("Mounted on", None),
+    ]
+    widths, kept, reduced = _allocate_column_widths(
+        [header for header, _ in headers],
+        rows,
+        table_width,
+        priority=(2, 3, 4, 5, 0, 1, 6),
+    )
+    classic_layout_degraded = reduced and (
+        len(kept) < len(headers)
+        or any(
+            index != 6 and widths[index] < max(
+                len(headers[index][0]),
+                *(
+                    _cell_length(row[index])
+                    for row in rows
+                    if index < len(row)
+                ),
+            )
+            for index in kept
+        )
+    )
+    table = Table(
+        title="Filesystem Overview",
+        header_style=PALETTE["heading"],
+        padding=(0, 1),
+        expand=False,
+        show_lines=False,
+        width=table_width,
+    )
+    _add_sized_columns(
+        table,
+        [headers[index] for index in kept],
+        [widths[index] for index in kept],
+    )
+    for filesystem, row in zip(
+        sorted(inventory.filesystems, key=lambda item: item.mountpoint),
+        rows,
+    ):
+        row[5] = Text(row[5], style=usage_style(filesystem.used_percent))
+        table.add_row(*(row[index] for index in kept))
+    console.print(
+        Panel(
+            table,
+            title="lsdisk  Linux Storage Explorer",
+            border_style=PALETTE["heading"],
+            width=panel_width,
+        )
+    )
+    if classic_layout_degraded:
+        console.print(Text(WIDTH_NOTICE, style=PALETTE["warning"]))

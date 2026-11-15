@@ -1,170 +1,155 @@
 # Development Guide
 
-This guide describes the local development workflow for lsdisk. The
-project targets Linux and is intended to work across distributions
-rather than depend on one distribution's package layout.
+This guide covers development of lsdisk, a read-only Linux storage explorer
+intended for multiple distributions and environments.
 
-## 1. Requirements
+## Requirements
 
--   Linux
--   Python 3.11 or newer
--   Git
--   `curl` and `tar` are needed for the user-facing shell installer, but
-    not for ordinary test execution
+- Linux with normal access to `/sys` and `/proc`.
+- Python 3.11 or newer (`pyproject.toml` is authoritative).
+- Git.
+- Internet access only when installing dependencies or building release
+  artifacts.
 
-## 2. Create the development environment
+Runtime dependencies are declared in `pyproject.toml`: `rich>=13.0`.
+`lsblk`, `blkid`, and the optional LVM/MD tools improve metadata coverage but
+are not required for every test or every inventory path. Distribution package
+names differ; install the equivalent Python, Rich, and optional system tools
+using the host distribution's documentation rather than assuming a package
+manager.
 
-Run these commands from the repository root:
+## Repository setup
 
-``` bash
-python --version
-python -m venv .venv
+```bash
+git clone https://github.com/SammMartins/lsdisk.git
+cd lsdisk
+python3 --version
+python3 -m venv .venv
 .venv/bin/python -m pip install --upgrade pip
 .venv/bin/python -m pip install -e .
 ```
 
-Using `.venv/bin/python` directly avoids accidentally running tests with
-the system interpreter if shell activation is not working as expected.
+Using `.venv/bin/python` and `.venv/bin/lsdisk` avoids accidentally using a
+different interpreter. Activation is optional:
 
-If you prefer activation, use:
-
-``` bash
+```bash
 source .venv/bin/activate
-which python
 python --version
 ```
 
-The executable should resolve to the `.venv` directory inside the
-current repository. If the repository has moved since the virtual
-environment was created, recreate `.venv`; virtual environments can
-retain references to their original location.
+## Run the application
 
-## 3. Run lsdisk
-
-From the repository root:
-
-``` bash
+```bash
 .venv/bin/lsdisk --help
 .venv/bin/lsdisk
 .venv/bin/lsdisk --all
-.venv/bin/lsdisk --table-mode
+.venv/bin/lsdisk --all --table-mode
 .venv/bin/lsdisk --json
+.venv/bin/lsdisk --all --json
+.venv/bin/lsdisk --classic --no-color
 ```
 
-Alternatively, activate `.venv` and use `lsdisk` directly. Check
-`lsdisk --help` for the options available in the current checkout.
+The application is read-only. Do not use development or test commands to
+format, partition, mount, activate, repair, or otherwise modify storage.
 
-## 4. Run tests and checks
+## Tests and checks
 
-Run the complete test suite:
+Run the complete suite:
 
-``` bash
+```bash
 .venv/bin/python -m unittest discover -s tests -v
 ```
 
-Compile Python source and tests:
+Run an individual module or test case:
 
-``` bash
+```bash
+.venv/bin/python -m unittest tests.test_serialization -v
+.venv/bin/python -m unittest tests.test_partition_inventory -v
+.venv/bin/python -m unittest tests.test_terminal -v
+```
+
+Compile source and tests:
+
+```bash
 .venv/bin/python -m compileall -q src tests
 ```
 
-Check the patch for whitespace problems:
+Validate Git whitespace:
 
-``` bash
+```bash
 git diff --check
 ```
 
-Tests should prefer controlled fixtures and mocked system interfaces
-over dependence on the developer's actual disks. This makes results
-repeatable and avoids relying on one machine's storage layout.
+Tests use fixtures and mocks for Linux interfaces and optional tools. They
+cover capacity ownership, filesystem grouping and probes, device paths,
+relationships, LVM/MD metadata handling, partition geometry, fstab parsing,
+serialization, CLI behavior, and terminal width/color behavior. Real-system
+LVM and RAID validation remains environment-dependent and must use a
+disposable test host.
 
-Relevant test areas include:
+## Build and packaging
 
--   Capacity calculations, units, percentages, zero values, and invalid
-    input.
--   Device discovery, parent/child relationships, and
-    physical-versus-virtual classification.
--   Mount information parsing and filesystem capacity collection.
--   Filesystem classification and grouping, including Btrfs subvolumes.
--   JSON serialization and CLI behavior.
--   Terminal output, utilization color thresholds, percentage clamping,
-    and unavailable capacity.
--   Missing, inaccessible, or malformed system information.
--   Read-only `blkid` probing, including unmounted filesystems, missing tools, and probe timeouts.
+Build the Python source and wheel distributions (requires the `build` package):
 
-## 5. Architecture and implementation workflow
+```bash
+.venv/bin/python -m pip install build
+.venv/bin/python -m build
+```
 
-Keep the main responsibilities separated:
+Build the Debian package on a Debian-family system with `dpkg-deb`, Python
+3.11+, and the `python3-rich` dependency available:
 
-1.  **Collectors** gather information from Linux interfaces and
-    available tools.
-2.  **Models** represent devices and filesystem measurements
-    consistently.
-3.  **Analyzers** interpret and group collected data without inventing
-    missing values.
-4.  **Serialization** exposes structured output such as JSON.
-5.  **UI** presents the inventory without coupling terminal presentation
-    to collection details.
+```bash
+bash packaging/deb/build-deb.sh
+```
 
-For each change:
+The script reads the version from `pyproject.toml`, writes
+`dist/lsdisk_<version>_all.deb`, and accepts an optional `RELEASE_TAG` that
+must match the project version with or without a leading `v`. It does not
+remove unrelated artifacts. GitHub Actions runs tests and package builds for
+published releases. The Debian package workflow also supports manual
+dispatch; the PyPI publishing workflow is release-only.
 
-1.  Define a narrow objective.
-2.  Inspect the relevant code and tests before editing.
-3.  Add or update tests for the behavior.
-4.  Implement the smallest coherent change.
-5.  Run relevant tests, then the full test suite.
-6.  Review the diff and document limitations or decisions that affect
-    future work.
+The project entry point is `lsdisk = lsdisk.main:main`. The shell installer
+and Debian packaging script are distribution mechanisms, not prerequisites
+for source development.
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for the data flow and integrity
-constraints.
+The per-user installer uses the exact `LSDISK_VERSION` selected by the
+installer (currently `0.1.3` by default), retrieves the matching PyPI source
+distribution, and verifies its SHA-256 digest from PyPI metadata before
+installation. It fails before installation when the version, artifact, or
+digest cannot be validated. Production source distributions exclude tests,
+generated metadata, caches, virtual environments, and local build artifacts.
 
-## 6. Safety and data integrity
+## Contribution workflow
 
-lsdisk is an inspection tool. Development and tests must not format,
-partition, modify filesystems, or automatically mount storage devices.
+1. Inspect the relevant implementation and tests before editing.
+2. Keep collection, models, analysis, serialization, and UI responsibilities
+   separate.
+3. Add focused tests for behavior introduced or corrected.
+4. Run the targeted tests, full suite, compilation, and whitespace checks.
+5. Review the complete diff and document externally visible behavior.
+6. Stage only intended files; do not commit generated environments, caches,
+   secrets, or machine-specific output.
 
-Follow these rules:
+Useful pre-staging commands:
 
--   Do not treat an unmounted partition as empty.
--   Do not report unavailable data as a confirmed zero.
--   Do not add physical capacity and logical-layer capacity together
-    without accounting for their relationship.
--   Avoid requiring root privileges unless a concrete requirement is
-    documented and reviewed.
--   Prefer native Python and Linux interfaces when they provide reliable
-    information; use external commands as justified fallbacks.
--   Keep installation and uninstallation scoped to the current user's
-    lsdisk files.
-
-## 7. Git workflow
-
-Before staging:
-
-``` bash
+```bash
 git status --short
 git diff --check
 git diff
+git diff --stat
 ```
 
-Stage only intended files, then inspect the staged changes:
+## Data-integrity rules
 
-``` bash
-git add <paths>
-git diff --cached --check
-git diff --cached --stat
-git diff --cached
-```
+- Preserve unknown and unavailable values; do not turn them into zero.
+- Do not treat an unmounted device as an empty filesystem.
+- Do not add partition or logical-layer capacity independently to physical
+  disk totals.
+- Keep active mounts distinct from `/etc/fstab` configuration.
+- Keep partition geometry read-only and conservative.
+- Never infer a storage relationship from an ambiguous or incomplete edge.
 
-Do not commit virtual environments, caches, local secrets, or
-machine-specific output. Do not include unrelated changes in the same
-commit.
-
-## 8. Current limitations
-
-The current MVP discovers block-device topology and collects capacity
-information for mounted filesystems. Read-only `blkid` probing now
-collects filesystem signatures, labels, and UUIDs when available,
-including on unmounted devices. Coverage across storage layers and
-distributions still requires validation; do not describe that broader
-compatibility as complete until implemented and tested.
+See [ARCHITECTURE.md](ARCHITECTURE.md) for module responsibilities and
+mathematical details, and [CHANGELOG.md](../CHANGELOG.md) for release history.

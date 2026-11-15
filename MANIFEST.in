@@ -1,0 +1,23 @@
+include LICENSE
+include README.md
+include pyproject.toml
+
+recursive-include src/lsdisk *.py
+
+prune tests
+prune .github
+prune .venv
+prune build
+prune dist
+prune .pytest_cache
+prune htmlcov
+prune src/lsdisk.egg-info
+exclude src/lsdisk.egg-info/SOURCES.txt
+exclude .coverage
+recursive-exclude src/lsdisk.egg-info *
+
+global-exclude *.egg-info/*
+global-exclude SOURCES.txt
+global-exclude __pycache__/*
+global-exclude *.py[cod]
+global-exclude *.pyo
